@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#081a33">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="المساندة">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.json">
+<title>الخدمات المساندة</title>
+<link rel="stylesheet" href="phone.css">
+</head>
+<body>
+<header>
+  <h1>الخدمات المساندة</h1>
+  <div id="pill"><i></i><span>يتصل…</span></div>
+</header>
+
+<section id="nolink" hidden>
+  <div class="big-ic">⌗</div>
+  <p>شغّل تطبيق <b>الخدمات المساندة</b> على الشاشة، وصوّر الباركود اللي يطلع فيه بكاميرا الجوال.</p>
+</section>
+
+<main id="main" hidden>
+  <label id="pick">
+    <input id="file" type="file" multiple accept="application/pdf,.pdf,image/*,video/*,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.key,.pages">
+    <span class="plus">＋</span>
+    <span><b>أرسل ملف للشاشة</b><small>PDF · صور · فيديو</small></span>
+  </label>
+  <div id="uploads"></div>
+
+  <div id="mirror">
+    <img id="thumb" alt="">
+    <div id="idle">الشاشة على القائمة الرئيسية<br><small>اختر ملف من تحت أو أرسل ملف جديد</small></div>
+    <div id="gest">اسحب يمين ويسار للتقليب · فوق وتحت للتمرير · اضغط مطوّل للمؤشر</div>
+  </div>
+
+  <div id="ctl" hidden>
+    <div class="row nav">
+      <button data-c="prev">السابق</button>
+      <button id="pg" class="pg">–</button>
+      <button data-c="next">التالي</button>
+    </div>
+    <div class="row" id="r-doc">
+      <button data-c="up" title="فوق">▲</button>
+      <button data-c="down" title="تحت">▼</button>
+      <button data-c="zoom" data-v="0.8">تصغير</button>
+      <button data-c="zoom" data-v="1.25">تكبير</button>
+      <button data-c="zoom" data-v="0">ملء</button>
+    </div>
+    <div class="row" id="r-vid">
+      <button data-c="seek" data-d="-10">١٠ ث ←</button>
+      <button data-c="play" id="play">تشغيل</button>
+      <button data-c="seek" data-d="10">→ ١٠ ث</button>
+      <button data-c="mute" id="mute">كتم</button>
+    </div>
+    <div class="row">
+      <button data-c="mode" id="mode">وضع التقرير</button>
+      <button data-c="home" class="home">القائمة</button>
+    </div>
+  </div>
+
+  <div class="list-h"><span>الملفات على الشاشة</span><button id="clear" hidden>مسح الكل</button></div>
+  <div id="list"></div>
+  <p class="note">الملفات تنتقل من جوالك للشاشة مباشرة ومشفّرة، وما تنحفظ على أي سيرفر. وتنمسح من الشاشة لما يتقفل التطبيق.</p>
+</main>
+
+<div id="msg" hidden></div>
+
+<script src="vendor/peerjs.min.js"></script>
+<script src="phone.js"></script>
+</body>
+</html>

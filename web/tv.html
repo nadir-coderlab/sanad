@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1920, height=1080">
+<title>الخدمات المساندة — الشاشة</title>
+<link rel="stylesheet" href="tv.css">
+</head>
+<body>
+<div id="root">
+  <!-- شاشة البداية: الباركود والملفات -->
+  <section id="home">
+    <div id="brand">
+      <div id="clock"></div>
+      <h1>الخدمات المساندة</h1>
+      <p class="sub">اعرض ملفاتك على الشاشة من جوالك</p>
+      <ol id="steps">
+        <li><b>١</b><span>صوّر الباركود بكاميرا الجوال</span></li>
+        <li><b>٢</b><span>أرسل ملف PDF أو صورة أو فيديو</span></li>
+        <li><b>٣</b><span>تحكّم من الجوال أو من ريموت الشاشة</span></li>
+      </ol>
+    </div>
+    <div id="qrcard">
+      <div id="qr"></div>
+      <div id="url"></div>
+      <div id="status"><i></i><span>يتصل…</span></div>
+    </div>
+    <div id="shelf">
+      <div class="shelf-h"><span>الملفات</span><em id="hint">اختر بالأسهم واضغط موافق</em></div>
+      <div id="files"></div>
+    </div>
+  </section>
+
+  <!-- العرض -->
+  <section id="view" hidden>
+    <div id="stage"><div id="pages"></div></div>
+    <div id="hud"><span id="hud-name"></span><span id="hud-page"></span><span id="hud-zoom"></span></div>
+    <div id="dot"></div>
+  </section>
+
+  <div id="toast" hidden></div>
+</div>
+
+<script src="vendor/qrcode.js"></script>
+<script src="vendor/peerjs.min.js"></script>
+<script src="vendor/pdfjs/pdf.min.js"></script>
+<script src="tv.js"></script>
+</body>
+</html>
