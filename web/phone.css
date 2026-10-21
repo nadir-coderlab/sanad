@@ -24,6 +24,15 @@ h1 { font-size: 22px; font-weight: 700; }
 
 #nolink { text-align: center; padding: 80px 20px; color: var(--soft); font-size: 18px; line-height: 1.8; }
 .big-ic { font-size: 72px; color: var(--teal); margin-bottom: 10px; }
+#pinbox { text-align: center; padding: 60px 20px; color: var(--soft); font-size: 18px; line-height: 1.8; }
+#pinbox small { color: var(--faint); font-size: 14px; }
+#pinform { display: flex; gap: 10px; justify-content: center; margin-top: 18px; }
+#pin { width: 150px; font: inherit; font-size: 28px; letter-spacing: 8px; text-align: center; direction: ltr; color: var(--ink);
+  background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 10px; }
+#pin:focus { outline: none; border-color: var(--teal); }
+#pingo { padding: 0 22px; background: var(--teal); color: #081a33; font-weight: 700; border: 0; }
+#pinerr { color: #ff9b9b; font-size: 15px; margin-top: 14px; }
+.chpin { display: block; margin: 14px auto 0; font-size: 13px; padding: 7px 16px; color: var(--soft); }
 
 #pick { display: flex; align-items: center; gap: 14px; padding: 16px 18px; border-radius: 18px; background: var(--teal);
   color: #04202a; cursor: pointer; }

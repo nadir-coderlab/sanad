@@ -23,6 +23,16 @@
   <p>شغّل تطبيق <b>الخدمات المساندة</b> على الشاشة، وصوّر الباركود اللي يطلع فيه بكاميرا الجوال.</p>
 </section>
 
+<section id="pinbox" hidden>
+  <div class="big-ic">🔒</div>
+  <p><b>اكتب الرقم السري</b><br><small>الرقم عند صاحب الشاشة</small></p>
+  <form id="pinform" autocomplete="off">
+    <input id="pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="off" placeholder="••••">
+    <button id="pingo" type="submit">دخول</button>
+  </form>
+  <p id="pinerr" hidden></p>
+</section>
+
 <main id="main" hidden>
   <label id="pick">
     <input id="file" type="file" multiple accept="application/pdf,.pdf,image/*,video/*,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.key,.pages">
@@ -73,7 +83,9 @@
 
   <div class="list-h"><span>الملفات على الشاشة</span><button id="clear" hidden>مسح الكل</button></div>
   <div id="list"></div>
-  <p class="note">الملفات تنتقل من جوالك للشاشة مباشرة ومشفّرة، وما تنحفظ على أي سيرفر. وتنمسح من الشاشة لما يتقفل التطبيق.</p>
+  <p class="note">الملفات تنتقل من جوالك للشاشة مباشرة ومشفّرة، وما تنحفظ على أي سيرفر. وتنمسح من الشاشة لما يتقفل التطبيق.
+    وقائمة الملفات تطلع هنا بس، والشاشة ما تعرض إلا اللي تختاره.</p>
+  <button id="chpin" class="chpin">تغيير الرقم السري</button>
 </main>
 
 <div id="msg" hidden></div>

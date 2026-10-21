@@ -90,22 +90,51 @@ setInterval(function () {
   else if (peer.disconnected) peer.reconnect();
 }, 30000);
 
-function onConn(conn) {
-  conn.rx = null;
-  conn.on('open', function () {
+// ── الرقم السري ──
+// أي جوال يتصل لازم يرسل الرقم الصحيح قبل ما يشوف أي ملف أو يتحكم بشي.
+// الرقم محفوظ في الشاشة (الافتراضي 1234)، ويتغيّر من جوال داخل بالرقم الحالي.
+var pin = localStorage.getItem('sanad-pin') || '1234';
+var pinFails = 0, pinLockUntil = 0;
+
+function checkPin(conn, m) {
+  var now = Date.now();
+  if (now < pinLockUntil) { send(conn, { t: 'pinbad', wait: Math.ceil((pinLockUntil - now) / 1000) }); return; }
+  if (String(m.pin) === pin) {
+    pinFails = 0;
+    conn.ok = true;
     conns.push(conn);
     updateStatus();
     toast('اتصل ' + (conn.metadata && conn.metadata.dev || 'جهاز'), 2500);
+    send(conn, { t: 'pinok' });
     send(conn, filesMsg());
     send(conn, stateMsg());
     send(conn, { t: 'thumb', data: lastThumb });
-  });
+    return;
+  }
+  // بعد ٥ محاولات غلط يقفل دقيقة
+  if (++pinFails >= 5) { pinFails = 0; pinLockUntil = now + 60000; }
+  send(conn, { t: 'pinbad', wait: pinLockUntil > now ? 60 : 0 });
+}
+
+function setPin(conn, m) {
+  var p = String(m.pin || '');
+  if (!/^\d{4,8}$/.test(p)) { send(conn, { t: 'pinset', ok: false }); return; }
+  pin = p;
+  localStorage.setItem('sanad-pin', pin);
+  send(conn, { t: 'pinset', ok: true });
+}
+
+function onConn(conn) {
+  conn.rx = null;
+  conn.ok = false;
+  conn.on('open', function () { send(conn, { t: 'auth' }); });
   conn.on('data', function (d) {
     if (typeof d === 'string') {
       var m;
       try { m = JSON.parse(d); } catch (e) { return; }
+      if (!conn.ok) { if (m.t === 'pin') checkPin(conn, m); return; }
       onMsg(conn, m);
-    } else if (d instanceof ArrayBuffer) onChunk(conn, d);
+    } else if (d instanceof ArrayBuffer && conn.ok) onChunk(conn, d);
   });
   function drop() {
     var i = conns.indexOf(conn);
@@ -124,14 +153,16 @@ function broadcast(m) { var s = JSON.stringify(m); conns.forEach(function (c) { 
 function onMsg(conn, m) {
   if (m.t === 'file') {
     conn.rx = { id: m.id, name: m.name, type: m.type, size: m.size, parts: [], got: 0, acked: 0 };
-    toast('يستقبل ' + m.name + '…');
+    if (!cur) toast('يستقبل ملف…');
     if (!m.size) finishRx(conn);
   } else if (m.t === 'cancel') {
-    if (conn.rx && conn.rx.id === m.id) { conn.rx = null; toast('انلغى الإرسال', 2000); }
+    if (conn.rx && conn.rx.id === m.id) { conn.rx = null; if (!cur) toast('انلغى الإرسال', 2000); }
   } else if (m.t === 'cmd') {
     cmd(m.c, m);
   } else if (m.t === 'get') {
     sendOut(conn, m.id);
+  } else if (m.t === 'setpin') {
+    setPin(conn, m);
   }
 }
 
@@ -166,7 +197,7 @@ function onChunk(conn, buf) {
   if (rx.got - rx.acked >= 262144 || rx.got >= rx.size) {
     rx.acked = rx.got;
     send(conn, { t: 'ack', id: rx.id, got: rx.got });
-    toast('يستقبل ' + rx.name + '  ' + ar(Math.floor(rx.got / rx.size * 100)) + '٪');
+    if (!cur) toast('يستقبل ملف…  ' + ar(Math.floor(rx.got / rx.size * 100)) + '٪');
   }
   if (rx.got >= rx.size) finishRx(conn);
 }
@@ -193,7 +224,7 @@ function byId(id) { for (var i = 0; i < files.length; i++) if (files[i].id === i
 
 function addFile(id, name, type, blob) {
   var kind = kindOf(name, type);
-  if (!kind) { toast('هالنوع ما ينعرض: ' + name, 4000); return; }
+  if (!kind) { hideToast(); broadcast({ t: 'say', text: 'هالنوع ما ينعرض: ' + name }); return; }
   if (byId(id)) removeFile(id);
   var f = { id: id, name: name.replace(/\.[^.]+$/, ''), file: name, type: type || blob.type, kind: kind, size: blob.size, blob: blob,
             url: URL.createObjectURL(blob), pages: 1, thumb: '', last: 1 };
@@ -207,10 +238,11 @@ function addFile(id, name, type, blob) {
     hideToast();
     renderShelf();
     broadcast(filesMsg());
-    openFile(f.id);
+    // ما يفتح لحاله: صاحب الجوال يختار وش يطلع على الشاشة
   }).catch(function (e) {
     URL.revokeObjectURL(f.url);
-    toast(e && e.name === 'PasswordException' ? 'الملف محمي بكلمة سر: ' + f.name : 'ما قدرت أفتح الملف: ' + f.name, 5000);
+    hideToast();
+    broadcast({ t: 'say', text: e && e.name === 'PasswordException' ? 'الملف محمي بكلمة سر: ' + f.name : 'ما قدرت أفتح الملف: ' + f.name });
   });
 }
 
@@ -516,10 +548,8 @@ function step(d) {
     if (n < 1 || n > f.pages) { showHud(); return; }
     gotoPage(n);
   } else {
-    // الصور والفيديو: ينتقل للملف اللي بعده
-    var i = files.indexOf(f) + d;
-    if (i >= 0 && i < files.length) openFile(files[i].id);
-    else showHud();
+    // الصور والفيديو: ما ننتقل لملف ثاني من هنا، عشان ما يطلع شي ما اختاره صاحبه من الجوال
+    showHud();
   }
 }
 
@@ -716,14 +746,8 @@ var KEYS = { 37: 'left', 38: 'up', 39: 'right', 40: 'down', 13: 'enter', 10009: 
 function onKey(code) {
   var k = KEYS[code];
   if (!k) return false;
-  if (!cur) {
-    var n = files.length;
-    if (k === 'left') { focusIdx = Math.min(n - 1, focusIdx + 1); renderShelf(); }
-    else if (k === 'right') { focusIdx = Math.max(0, focusIdx - 1); renderShelf(); }
-    else if (k === 'enter' && n) openFile(files[n - 1 - focusIdx].id);
-    else if (k === 'back') exitApp();
-    return true;
-  }
+  // قائمة الملفات ما تنعرض على الشاشة، فالاختيار من الجوال بس
+  if (!cur) { if (k === 'back') exitApp(); return true; }
   switch (k) {
     case 'right': case 'chdown': step(1); break;
     case 'left': case 'chup': step(-1); break;

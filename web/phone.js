@@ -12,7 +12,7 @@ var sid = location.hash.slice(1);
 if (sid) localStorage.setItem('sanad-id', sid);
 else sid = localStorage.getItem('sanad-id');
 if (!sid) { $('nolink').hidden = false; pill('bad', 'ما فيه شاشة'); }
-else $('main').hidden = false;
+// الصفحة الرئيسية ما تطلع إلا بعد ما الشاشة تقبل الرقم السري
 addEventListener('hashchange', function () { location.reload(); });
 
 function pill(cls, text) { var p = $('pill'); p.className = cls; p.lastChild.textContent = text; }
@@ -50,9 +50,7 @@ function connect() {
   openTimer = setTimeout(function () { if (!c.open) { c.close(); retry(500); } }, 15000);
   c.on('open', function () {
     clearTimeout(openTimer);
-    pill('ok', 'متصل');
-    linkType(c);
-    pumpQueue();
+    pill('', 'يتحقق…');
   });
   c.on('data', function (d) {
     if (typeof d === 'string') { try { onMsg(JSON.parse(d)); } catch (e) {} }
@@ -105,7 +103,69 @@ document.addEventListener('click', wake);
 // ── اللي يجي من الشاشة ──
 var files = [], cur = null;
 
+// ── الرقم السري: نحفظه بعد أول دخول صحيح عشان ما ينسأل كل مرة ──
+var pinKey = 'sanad-pin-' + sid, pinSent = '';
+
+function askPin(err) {
+  $('main').hidden = true;
+  $('pinbox').hidden = false;
+  $('pinerr').hidden = !err;
+  $('pinerr').textContent = err || '';
+  $('pin').value = '';
+  pill('', 'بانتظار الرقم السري');
+  setTimeout(function () { $('pin').focus(); }, 50);
+}
+
+function sendPin(p) {
+  pinSent = p;
+  send({ t: 'pin', pin: p });
+}
+
+$('pinform').addEventListener('submit', function (e) {
+  e.preventDefault();
+  var p = toLatin($('pin').value).replace(/\D/g, '');
+  if (p.length < 4) { $('pinerr').hidden = false; $('pinerr').textContent = 'الرقم ٤ أرقام أو أكثر'; return; }
+  sendPin(p);
+});
+
+function toLatin(s) { return String(s).replace(/[٠-٩]/g, function (d) { return '٠١٢٣٤٥٦٧٨٩'.indexOf(d); }); }
+
+$('chpin').onclick = function () {
+  var a = toLatin(prompt('الرقم السري الجديد (من ٤ إلى ٨ أرقام)') || '').trim();
+  if (!a) return;
+  if (!/^\d{4,8}$/.test(a)) { say('الرقم لازم يكون من ٤ إلى ٨ أرقام.'); return; }
+  var b = toLatin(prompt('اكتب الرقم الجديد مرة ثانية للتأكيد') || '').trim();
+  if (a !== b) { say('الرقمين مو متطابقين، ما تغيّر شي.'); return; }
+  pinSent = a;
+  send({ t: 'setpin', pin: a });
+};
+
 function onMsg(m) {
+  if (m.t === 'auth') {
+    var saved = localStorage.getItem(pinKey);
+    if (saved) sendPin(saved); else askPin();
+    return;
+  }
+  if (m.t === 'pinok') {
+    localStorage.setItem(pinKey, pinSent);
+    $('pinbox').hidden = true;
+    $('main').hidden = false;
+    pill('ok', 'متصل');
+    if (conn) linkType(conn);
+    pumpQueue();
+    return;
+  }
+  if (m.t === 'pinbad') {
+    localStorage.removeItem(pinKey);
+    askPin(m.wait ? 'محاولات كثيرة غلط. انتظر ' + ar(m.wait) + ' ثانية وجرّب.' : 'الرقم السري غلط.');
+    return;
+  }
+  if (m.t === 'pinset') {
+    if (m.ok) { localStorage.setItem(pinKey, pinSent); say('تغيّر الرقم السري ✓ بلّغ فريقك بالرقم الجديد.', 5000); }
+    else say('ما تغيّر الرقم. لازم يكون من ٤ إلى ٨ أرقام.');
+    return;
+  }
+  if (m.t === 'say') { say(m.text, 6000); return; }
   if (m.t === 'files') { files = m.files; renderList(); }
   else if (m.t === 'state') { cur = m.cur; renderCtl(); renderList(); }
   else if (m.t === 'thumb') {
@@ -117,7 +177,10 @@ function onMsg(m) {
   else if (m.t === 'ack') { var u = upById(m.id); if (u) { u.acked = m.got; drawUp(u); } }
   else if (m.t === 'done') {
     var d = upById(m.id);
-    if (d) { d.state = 'done'; d.acked = d.size; drawUp(d); setTimeout(function () { removeUp(d); }, 2500); }
+    if (d) {
+      d.state = 'done'; d.acked = d.size; drawUp(d); setTimeout(function () { removeUp(d); }, 2500);
+      say('وصل «' + d.name + '». اضغط عليه تحت عشان يطلع على الشاشة.', 5000);
+    }
     if (waitDone) { waitDone(); waitDone = null; }
   }
   else if (m.t === 'fileout') {
