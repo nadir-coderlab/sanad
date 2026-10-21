@@ -33,6 +33,7 @@
 
   <div id="mirror">
     <img id="thumb" alt="">
+    <canvas id="draft"></canvas>
     <div id="idle">الشاشة على القائمة الرئيسية<br><small>اختر ملف من تحت أو أرسل ملف جديد</small></div>
     <div id="gest">اسحب يمين ويسار للتقليب · فوق وتحت للتمرير · اضغط مطوّل للمؤشر</div>
   </div>
@@ -55,6 +56,14 @@
       <button data-c="play" id="play">تشغيل</button>
       <button data-c="seek" data-d="10">→ ١٠ ث</button>
       <button data-c="mute" id="mute">كتم</button>
+    </div>
+    <div class="row" id="r-ink">
+      <button id="pen">✎ قلم</button>
+      <button class="col on" data-col="red" aria-label="أحمر"><i style="background:#e53935"></i></button>
+      <button class="col" data-col="blue" aria-label="أزرق"><i style="background:#1e88e5"></i></button>
+      <button class="col" data-col="yellow" aria-label="أصفر"><i style="background:#ffd400"></i></button>
+      <button data-c="undo">تراجع</button>
+      <button data-c="inkclear">مسح</button>
     </div>
     <div class="row">
       <button data-c="mode" id="mode">وضع التقرير</button>

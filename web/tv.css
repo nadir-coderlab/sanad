@@ -57,6 +57,7 @@ h1 { font-size: 108px; font-weight: 700; line-height: 1.05; }
 #pages .pg canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 #pages.slides .pg { margin: 0 auto; box-shadow: none; }
 #pages img.media, #pages video.media { display: block; margin: 0 auto; }
+#ink { position: absolute; inset: 0; width: 1920px; height: 1080px; pointer-events: none; }
 
 #hud { position: absolute; bottom: 36px; left: 50%; transform: translateX(-50%); padding: 14px 32px; border-radius: 40px;
   background: rgba(10,14,22,.82); font-size: 26px; display: flex; gap: 28px; opacity: 0; transition: opacity .5s; white-space: nowrap; }

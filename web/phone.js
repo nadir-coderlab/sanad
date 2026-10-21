@@ -99,7 +99,7 @@ document.addEventListener('visibilitychange', function () {
 
 // يخلي شاشة الجوال صاحية وقت الاجتماع
 var lock = null;
-function wake() { try { if (!lock && navigator.wakeLock) navigator.wakeLock.request('screen').then(function (l) { lock = l; l.onrelease = function () { lock = null; }; }); } catch (e) {} }
+function wake() { try { if (!lock && navigator.wakeLock) navigator.wakeLock.request('screen').then(function (l) { lock = l; l.onrelease = function () { lock = null; }; }, function () {}); } catch (e) {} }
 document.addEventListener('click', wake);
 
 // ── اللي يجي من الشاشة ──
@@ -111,6 +111,8 @@ function onMsg(m) {
   else if (m.t === 'thumb') {
     if (m.data) $('thumb').src = m.data;
     $('idle').hidden = !!m.data;
+    // الصورة الجاية من الشاشة صار فيها الرسم، فنمسح المسودة
+    if (!stroke) dg.clearRect(0, 0, draft.width, draft.height);
   }
   else if (m.t === 'ack') { var u = upById(m.id); if (u) { u.acked = m.got; drawUp(u); } }
   else if (m.t === 'done') {
@@ -210,8 +212,10 @@ function renderList() {
 function renderCtl() {
   $('ctl').hidden = !cur;
   $('gest').style.opacity = cur ? 1 : 0;
-  if (!cur) { $('idle').hidden = false; return; }
+  if (!cur) { $('idle').hidden = false; if (pen) setPen(false); return; }
   var pdf = cur.kind === 'pdf', vid = cur.kind === 'video';
+  $('r-ink').hidden = vid;
+  if (vid && pen) setPen(false);
   $('pg').textContent = pdf ? ar(cur.page) + ' / ' + ar(cur.pages) : KINDS[cur.kind];
   $('r-doc').hidden = vid;
   $('r-vid').hidden = !vid;
@@ -237,6 +241,66 @@ $('pg').onclick = function () {
 };
 $('clear').onclick = function () { if (confirm('تمسح كل الملفات من الشاشة؟')) cmd('clear'); };
 
+// ── القلم: الرسم على الصورة المصغّرة يطلع على الشاشة ──
+var pen = false, penCol = 'red', stroke = null, inkSeq = 0;
+var INK = { red: '#e53935', blue: '#1e88e5', yellow: '#ffd400' };
+var draft = $('draft'), dg = draft.getContext('2d');
+
+function setPen(on) {
+  pen = on;
+  $('pen').classList.toggle('on', on);
+  $('mirror').classList.toggle('pen', on);
+  $('gest').textContent = on ? 'ارسم بإصبعك على الصورة · «تراجع» يمسح آخر خط' :
+    'اسحب يمين ويسار للتقليب · فوق وتحت للتمرير · اضغط مطوّل للمؤشر';
+}
+$('pen').onclick = function () { setPen(!pen); };
+Array.prototype.forEach.call(document.querySelectorAll('#r-ink .col'), function (b) {
+  b.onclick = function () {
+    penCol = b.dataset.col;
+    Array.prototype.forEach.call(document.querySelectorAll('#r-ink .col'), function (x) { x.classList.toggle('on', x === b); });
+    setPen(true);
+  };
+});
+
+function inkStart(p) {
+  var r = $('mirror').getBoundingClientRect(), k = devicePixelRatio || 1;
+  draft.width = Math.round(r.width * k); draft.height = Math.round(r.height * k);
+  dg.setTransform(k, 0, 0, k, 0, 0);
+  dg.lineCap = dg.lineJoin = 'round';
+  dg.lineWidth = 3;
+  dg.strokeStyle = INK[penCol];
+  stroke = { id: Date.now().toString(36) + (inkSeq++), w: r.width, h: r.height, last: p, buf: [], timer: null };
+  inkPush(p);
+}
+
+function inkMove(p) {
+  var s = stroke;
+  dg.beginPath();
+  dg.moveTo(s.last.x * s.w, s.last.y * s.h);
+  dg.lineTo(p.x * s.w, p.y * s.h);
+  dg.stroke();
+  s.last = p;
+  inkPush(p);
+}
+
+function inkPush(p) {
+  var s = stroke;
+  s.buf.push(Math.round(p.x * 1e4) / 1e4, Math.round(p.y * 1e4) / 1e4);
+  if (!s.timer) s.timer = setTimeout(function () { inkFlush(s); }, 40);
+}
+
+function inkFlush(s) {
+  clearTimeout(s.timer);
+  s.timer = null;
+  if (s.buf.length) cmd('ink', { s: s.id, col: penCol, p: s.buf });
+  s.buf = [];
+}
+
+function inkEnd() {
+  inkFlush(stroke);
+  stroke = null;
+}
+
 // ── اللمس على الصورة المصغّرة: سحب = تقليب/تمرير، ضغط مطوّل = مؤشر، نقرة = نقطة ──
 (function () {
   var m = $('mirror'), s = null, acc = { x: 0, y: 0 }, flush = null;
@@ -244,6 +308,7 @@ $('clear').onclick = function () { if (confirm('تمسح كل الملفات م�
   m.addEventListener('pointerdown', function (e) {
     if (!cur) return;
     m.setPointerCapture(e.pointerId);
+    if (pen) { inkStart(rel(e)); return; }
     var p = rel(e);
     s = { x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, t: Date.now(), moved: false, laser: false, k: p.k };
     s.timer = setTimeout(function () {
@@ -251,6 +316,7 @@ $('clear').onclick = function () { if (confirm('تمسح كل الملفات م�
     }, 350);
   });
   m.addEventListener('pointermove', function (e) {
+    if (stroke) { inkMove(rel(e)); return; }
     if (!s) return;
     var dx = e.clientX - s.x, dy = e.clientY - s.y;
     s.x = e.clientX; s.y = e.clientY;
@@ -266,6 +332,7 @@ $('clear').onclick = function () { if (confirm('تمسح كل الملفات م�
     }
   });
   function end(e) {
+    if (stroke) { inkMove(rel(e)); inkEnd(); return; }
     if (!s) return;
     clearTimeout(s.timer);
     var dx = e.clientX - s.x0, dy = e.clientY - s.y0, dt = Date.now() - s.t;
@@ -277,7 +344,7 @@ $('clear').onclick = function () { if (confirm('تمسح كل الملفات م�
     s = null;
   }
   m.addEventListener('pointerup', end);
-  m.addEventListener('pointercancel', function () { if (s) clearTimeout(s.timer); s = null; });
+  m.addEventListener('pointercancel', function () { if (stroke) inkEnd(); if (s) clearTimeout(s.timer); s = null; });
   var lastPt = 0;
   function throttlePoint(x, y) { var n = Date.now(); if (n - lastPt > 40) { lastPt = n; cmd('point', { x: x, y: y }); } }
 })();

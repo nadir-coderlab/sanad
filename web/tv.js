@@ -348,6 +348,7 @@ function goHome() {
   if (cur) cur.f.last = cur.page;
   stopVideo();
   cur = null;
+  clearInk();
   pagesEl.innerHTML = '';
   showView(false);
   renderShelf();
@@ -368,6 +369,7 @@ function layout(keep) {
     fy = (stage.scrollTop + H / 2) / stage.scrollHeight;
   }
   paintJob++;
+  clearInk();
   pagesEl.innerHTML = '';
   pagesEl.className = '';
   pagesEl.style.cssText = '';
@@ -484,6 +486,7 @@ function prefetch() {
   });
 }
 
+stage.addEventListener('scroll', function () { if (strokes.length) drawInk(); });
 stage.addEventListener('scroll', throttle(function () {
   if (!cur) return;
   if (cur.f.kind === 'pdf' && cur.mode === 'doc') {
@@ -577,12 +580,56 @@ function cmd(c, a) {
       }
       break;
     case 'point': point(a.x, a.y); break;
+    case 'ink': ink(a); break;
+    case 'undo': if (strokes.length) { strokes.pop(); drawInk(); scheduleThumb(); } break;
+    case 'inkclear': clearInk(); scheduleThumb(); break;
     case 'play': if (v) { if (v.paused) v.play(); else v.pause(); } break;
     case 'seek': if (v) v.currentTime = Math.max(0, v.currentTime + (a.d || 0)); break;
     case 'mute': if (v) { v.muted = !v.muted; changed(); } break;
     case 'delete': removeFile(a.id); break;
     case 'clear': files.slice().forEach(function (f) { removeFile(f.id, true); }); renderShelf(); broadcast(filesMsg()); break;
   }
+}
+
+// ── الرسم على الملف ──
+// الخطوط تنحفظ بإحداثيات المحتوى (مو الشاشة)، عشان تمشي مع الصفحة وقت التمرير.
+// وتنمسح لما تتغيّر الصفحة أو التكبير أو الوضع.
+var inkEl = $('ink'), inkG = inkEl.getContext('2d'), strokes = [];
+var INK = { red: '#e53935', blue: '#1e88e5', yellow: '#ffd400' };
+
+function ink(a) {
+  if (!cur || !a.p || !a.p.length) return;
+  var s = null;
+  for (var i = strokes.length - 1; i >= 0; i--) if (strokes[i].id === a.s) { s = strokes[i]; break; }
+  if (!s) { s = { id: a.s, c: INK[a.col] || INK.red, pts: [] }; strokes.push(s); }
+  for (var j = 0; j + 1 < a.p.length; j += 2) {
+    s.pts.push(stage.scrollLeft + a.p[j] * W, stage.scrollTop + a.p[j + 1] * H);
+  }
+  drawInk();
+  scheduleThumb();
+}
+
+function drawInk() {
+  inkG.clearRect(0, 0, W, H);
+  var ox = stage.scrollLeft, oy = stage.scrollTop;
+  inkG.lineCap = inkG.lineJoin = 'round';
+  inkG.lineWidth = 7;
+  strokes.forEach(function (s) {
+    var p = s.pts;
+    if (!p.length) return;
+    inkG.strokeStyle = s.c;
+    inkG.beginPath();
+    inkG.moveTo(p[0] - ox, p[1] - oy);
+    if (p.length === 2) inkG.lineTo(p[0] - ox + .1, p[1] - oy);
+    for (var i = 2; i < p.length; i += 2) inkG.lineTo(p[i] - ox, p[i + 1] - oy);
+    inkG.stroke();
+  });
+}
+
+function clearInk() {
+  if (!strokes.length) return;
+  strokes = [];
+  drawInk();
 }
 
 var dotTimer;
@@ -657,6 +704,7 @@ function snapshot() {
       else { g.fillStyle = '#fff'; g.fillRect(x, y, w, h); }
     } catch (e) {}
   });
+  if (strokes.length) g.drawImage(inkEl, 0, 0, 480, 270);
   return c.toDataURL('image/jpeg', .72);
 }
 
