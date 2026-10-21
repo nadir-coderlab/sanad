@@ -111,6 +111,7 @@ function onConn(conn) {
     var i = conns.indexOf(conn);
     if (i >= 0) conns.splice(i, 1);
     conn.rx = null;
+    conn.tx = null;
     updateStatus();
   }
   conn.on('close', drop);
@@ -129,7 +130,32 @@ function onMsg(conn, m) {
     if (conn.rx && conn.rx.id === m.id) { conn.rx = null; toast('انلغى الإرسال', 2000); }
   } else if (m.t === 'cmd') {
     cmd(m.c, m);
+  } else if (m.t === 'get') {
+    sendOut(conn, m.id);
   }
+}
+
+// ── تنزيل ملف من الشاشة للجوال ──
+var OUT_CHUNK = 64 * 1024;
+function sendOut(conn, id) {
+  var f = byId(id);
+  if (!f) { send(conn, { t: 'nofile', id: id }); return; }
+  var tx = conn.tx = { id: id, off: 0 };
+  send(conn, { t: 'fileout', id: id, name: f.file, type: f.type, size: f.size });
+  function next() {
+    if (conn.tx !== tx || !conn.open) return;
+    if (tx.off >= f.size) { conn.tx = null; return; }
+    // ما نعبّي الطابور أكثر من ٢ ميقا
+    var dc = conn.dataChannel;
+    if (dc && dc.bufferedAmount > 2 * 1024 * 1024) { setTimeout(next, 20); return; }
+    f.blob.slice(tx.off, tx.off + OUT_CHUNK).arrayBuffer().then(function (buf) {
+      if (conn.tx !== tx || !conn.open) return;
+      try { conn.send(buf); } catch (e) { conn.tx = null; return; }
+      tx.off += buf.byteLength;
+      next();
+    }, function () { conn.tx = null; });
+  }
+  next();
 }
 
 function onChunk(conn, buf) {
@@ -169,7 +195,7 @@ function addFile(id, name, type, blob) {
   var kind = kindOf(name, type);
   if (!kind) { toast('هالنوع ما ينعرض: ' + name, 4000); return; }
   if (byId(id)) removeFile(id);
-  var f = { id: id, name: name.replace(/\.[^.]+$/, ''), kind: kind, size: blob.size, blob: blob,
+  var f = { id: id, name: name.replace(/\.[^.]+$/, ''), file: name, type: type || blob.type, kind: kind, size: blob.size, blob: blob,
             url: URL.createObjectURL(blob), pages: 1, thumb: '', last: 1 };
   var ready;
   if (kind === 'pdf') ready = loadPdf(f);

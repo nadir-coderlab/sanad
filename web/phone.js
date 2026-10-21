@@ -54,8 +54,11 @@ function connect() {
     linkType(c);
     pumpQueue();
   });
-  c.on('data', function (d) { if (typeof d === 'string') { try { onMsg(JSON.parse(d)); } catch (e) {} } });
-  c.on('close', function () { if (conn === c) { pill('bad', 'انقطع، يعيد الاتصال…'); failActive(); retry(1500); } });
+  c.on('data', function (d) {
+    if (typeof d === 'string') { try { onMsg(JSON.parse(d)); } catch (e) {} }
+    else if (d instanceof ArrayBuffer) onChunk(d);
+  });
+  c.on('close', function () { if (conn === c) { pill('bad', 'انقطع، يعيد الاتصال…'); failActive(); failDl(); retry(1500); } });
   c.on('error', function () {});
 }
 
@@ -115,6 +118,72 @@ function onMsg(m) {
     if (d) { d.state = 'done'; d.acked = d.size; drawUp(d); setTimeout(function () { removeUp(d); }, 2500); }
     if (waitDone) { waitDone(); waitDone = null; }
   }
+  else if (m.t === 'fileout') {
+    dl = { id: m.id, name: m.name, type: m.type || '', size: m.size, parts: [], got: 0 };
+    if (!m.size) finishDl();
+    else drawDl(m.id);
+  }
+  else if (m.t === 'nofile') { dl = null; say('الملف انمسح من الشاشة.'); renderList(); }
+}
+
+// ── تنزيل ملف من الشاشة للجوال ──
+var dl = null, saved = {};
+
+function onChunk(buf) {
+  if (!dl) return;
+  dl.parts.push(buf);
+  dl.got += buf.byteLength;
+  drawDl(dl.id);
+  if (dl.got >= dl.size) finishDl();
+}
+
+function finishDl() {
+  var d = dl;
+  dl = null;
+  saved[d.id] = new File(d.parts, d.name, { type: d.type });
+  renderList();
+  say('نزل «' + d.name + '». اضغط «حفظ» عشان تحفظه في جوالك.', 5000);
+}
+
+function failDl() {
+  if (!dl) return;
+  dl = null;
+  say('انقطع التنزيل، جرّب مرة ثانية.');
+  renderList();
+}
+
+function dlLabel(id) {
+  if (saved[id]) return 'حفظ';
+  if (dl && dl.id === id) return dl.size ? ar(Math.floor(dl.got / dl.size * 100)) + '٪' : '…';
+  return 'تنزيل';
+}
+
+function drawDl(id) {
+  var b = document.querySelector('.dl[data-id="' + id + '"]');
+  if (b) b.textContent = dlLabel(id);
+}
+
+function download(f) {
+  if (saved[f.id]) { saveFile(saved[f.id]); return; }
+  if (dl) { say('فيه ملف ينزل الحين، انتظره يخلص.'); return; }
+  dl = { id: f.id, name: f.name, size: f.size, parts: [], got: 0 };
+  send({ t: 'get', id: f.id });
+  drawDl(f.id);
+}
+
+// في الآيفون والأندرويد نفتح قائمة المشاركة (حفظ في الملفات أو الصور)، وإذا ما تنفع نحمّله عادي
+function saveFile(file) {
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    navigator.share({ files: [file] }).catch(function (e) { if (e && e.name !== 'AbortError') plainSave(file); });
+  } else plainSave(file);
+}
+function plainSave(file) {
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(file);
+  a.download = file.name;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 60000);
 }
 
 function renderList() {
@@ -127,9 +196,11 @@ function renderList() {
     d.className = 'it' + (cur && cur.id === f.id ? ' on' : '');
     d.innerHTML = (f.thumb ? '<img src="' + f.thumb + '">' : '<div class="ph"></div>') +
       '<div class="x"><b>' + esc(f.name) + '</b><span>' + KINDS[f.kind] +
-      (f.kind === 'pdf' ? ' · ' + ar(f.pages) + ' صفحة' : '') + '</span></div><button class="del">حذف</button>';
+      (f.kind === 'pdf' ? ' · ' + ar(f.pages) + ' صفحة' : '') + '</span></div>' +
+      '<button class="dl" data-id="' + esc(f.id) + '">' + dlLabel(f.id) + '</button><button class="del">حذف</button>';
     d.onclick = function (e) {
       if (e.target.classList.contains('del')) cmd('delete', { id: f.id });
+      else if (e.target.classList.contains('dl')) download(f);
       else cmd('open', { id: f.id });
     };
     box.appendChild(d);
