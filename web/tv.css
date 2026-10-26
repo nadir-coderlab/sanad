@@ -17,7 +17,7 @@ html, body { width: 100vw; height: 100vh; overflow: hidden; background: #050d1a;
 #home { position: absolute; inset: 0; background:
   radial-gradient(1200px 700px at 85% 0%, rgba(76,195,201,.16), transparent 60%),
   linear-gradient(160deg, #0d2c52 0%, #081a33 55%, #050d1a 100%); }
-#brand { position: absolute; top: 96px; right: 120px; width: 980px; }
+#brand { position: absolute; top: 250px; right: 120px; width: 980px; }
 #clock { font-size: 30px; font-weight: 500; color: var(--faint); margin-bottom: 40px; }
 h1 { font-size: 108px; font-weight: 700; line-height: 1.05; }
 .sub { font-size: 38px; color: var(--soft); margin-top: 18px; }
@@ -30,7 +30,7 @@ h1 { font-size: 108px; font-weight: 700; line-height: 1.05; }
 #qr { width: 520px; height: 520px; background: #fff; border-radius: 36px; padding: 34px; box-shadow: 0 30px 80px rgba(0,0,0,.45); }
 #qr svg { width: 100%; height: 100%; display: block; }
 #url { margin-top: 26px; font-size: 26px; color: var(--soft); direction: ltr; letter-spacing: .5px; }
-#logo { position: absolute; right: 120px; bottom: 80px; height: 210px; }
+#logo { position: absolute; right: 120px; top: 60px; height: 150px; }
 #status { margin-top: 14px; font-size: 24px; color: var(--faint); display: flex; gap: 12px; align-items: center; justify-content: center; }
 #status i { width: 14px; height: 14px; border-radius: 7px; background: var(--gold); }
 #status.ok i { background: #6ee7a8; }
