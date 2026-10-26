@@ -339,108 +339,200 @@ function loadPdf(f) {
   });
 }
 
-// ── ملفات Excel و CSV: تنقرا بـ SheetJS وتنعرض جدول كبير مقروء من بعيد ──
-var SHEET_MAX_ROWS = 3000;
+// ── ملفات Excel و CSV: تنعرض مثل ما تنفتح على كمبيوتر ──
+// حروف الأعمدة وأرقام الصفوف، والخلايا المدموجة، وعرض الأعمدة وألوان الخلايا من الملف،
+// وتبويبات الأوراق تحت، وشريط فوق يبيّن الخلية المختارة. والماوس من الجوال يختار ويتنقّل.
+var SHEET_MAX_ROWS = 3000, SHEET_MAX_COLS = 150, XL_K = 1.6;   // XL_K: تكبير الإكسل على التلفزيون (١٦٠٪)
 
 function loadSheet(f) {
   return f.blob.arrayBuffer().then(function (buf) {
-    f.book = XLSX.read(new Uint8Array(buf), { type: 'array' });
+    f.book = XLSX.read(new Uint8Array(buf), { type: 'array', cellStyles: true });
     f.grids = [];
     f.pages = f.book.SheetNames.length || 1;
     f.ratio = 16 / 9;
     var g = sheetGrid(f, 0);
-    if (!g.rows.length && f.pages === 1) throw new Error('empty');
+    if (!g.nr && f.pages === 1) throw new Error('empty');
     f.thumb = sheetThumb(g);
   });
 }
 
-// بعض الملفات المصدَّرة تعلن نطاق غلط (مثل A1:C1) يخفي كل الصفوف، فنحسبه من الخلايا نفسها
-function fixRange(ws) {
-  var keys = Object.keys(ws).filter(function (k) { return k[0] !== '!'; });
-  if (!keys.length) return ws;
-  var mr = 0, mc = 0;
-  keys.forEach(function (k) { var a = XLSX.utils.decode_cell(k); if (a.r > mr) mr = a.r; if (a.c > mc) mc = a.c; });
-  ws['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: mr, c: mc } });
-  return ws;
-}
+function colName(c) { var s = ''; c++; while (c) { var m = (c - 1) % 26; s = String.fromCharCode(65 + m) + s; c = (c - m - 1) / 26; } return s; }
 
-// يحوّل الورقة لصفوف نصوص (بنفس تنسيق الأرقام والتواريخ اللي في الإكسل)، ويشيل الأعمدة الفاضية في الآخر
 function sheetGrid(f, i) {
   if (f.grids[i]) return f.grids[i];
-  var name = f.book.SheetNames[i], ws = f.book.Sheets[name];
-  // الصفوف الفاضية تبقى عشان رقم الصف على الشاشة يطابق رقمه في الإكسل، ونشيل الفاضي من البداية والنهاية بس
-  var rows = ws ? XLSX.utils.sheet_to_json(fixRange(ws), { header: 1, raw: false, defval: '', blankrows: true }) : [];
-  function blank(r) { return !r || !r.some(function (v) { return String(v).trim() !== ''; }); }
-  var start = 0;
-  while (start < rows.length && blank(rows[start])) start++;
-  var end = rows.length;
-  while (end > start && blank(rows[end - 1])) end--;
-  rows = rows.slice(start, end);
-  var total = rows.length, cols = 0;
-  rows = rows.slice(0, SHEET_MAX_ROWS);
-  rows.forEach(function (r) {
-    for (var c = r.length - 1; c >= 0; c--) if (String(r[c]).trim() !== '') { if (c + 1 > cols) cols = c + 1; break; }
+  var name = f.book.SheetNames[i], ws = f.book.Sheets[name] || {};
+  var keys = Object.keys(ws).filter(function (k) { return k[0] !== '!'; });
+  // آخر صف وعمود فيهم شي (بعض الملفات تعلن نطاق غلط)
+  var lr = -1, lc = -1;
+  keys.forEach(function (k) {
+    var cell = ws[k]; if (cell == null || (cell.v == null && cell.w == null) || String(cell.w != null ? cell.w : cell.v).trim() === '') return;
+    var p = XLSX.utils.decode_cell(k); if (p.r > lr) lr = p.r; if (p.c > lc) lc = p.c;
   });
-  rows = rows.map(function (r) { var o = []; for (var c = 0; c < cols; c++) o.push(r[c] == null ? '' : String(r[c])); return o; });
-  // الاتجاه حسب اللغة الغالبة في أول الصفوف
-  var sample = rows.slice(0, 60).map(function (r) { return r.join(' '); }).join(' ');
-  var arN = (sample.match(/[؀-ۿ]/g) || []).length, laN = (sample.match(/[A-Za-z]/g) || []).length;
-  return (f.grids[i] = { name: name, rows: rows, cols: cols, start: start, more: total - rows.length, rtl: arN >= laN });
+  (ws['!merges'] || []).forEach(function (m) { if (m.e.r > lr && m.s.r <= lr) lr = m.e.r; if (m.e.c > lc && m.s.c <= lc) lc = m.e.c; });
+  var nr = Math.min(lr + 1, SHEET_MAX_ROWS), nc = Math.min(lc + 1, SHEET_MAX_COLS);
+  var cells = [], sample = '';
+  for (var r = 0; r < nr; r++) {
+    var row = [];
+    for (var c = 0; c < nc; c++) {
+      var cell = ws[XLSX.utils.encode_cell({ r: r, c: c })], o = { v: '' };
+      if (cell) {
+        o.v = cell.w != null ? String(cell.w) : cell.v != null ? String(cell.v) : '';
+        o.num = cell.t === 'n';
+        var st = cell.s;
+        if (st && st.fgColor && st.fgColor.rgb && st.patternType && st.patternType !== 'none') {
+          var rgb = String(st.fgColor.rgb); if (rgb.length === 8) rgb = rgb.slice(2);
+          if (/^[0-9a-f]{6}$/i.test(rgb) && rgb.toUpperCase() !== 'FFFFFF') {
+            o.bg = '#' + rgb;
+            // لون الخط ما يوصلنا من الملف، فعلى الخلفيات الغامقة نخليه أبيض (مثل اللي غالبًا في الإكسل)
+            var n = parseInt(rgb, 16), lum = (0.299 * (n >> 16) + 0.587 * (n >> 8 & 255) + 0.114 * (n & 255)) / 255;
+            if (lum < 0.5) o.fg = '#fff';
+          }
+        }
+      }
+      if (r < 80 && o.v) sample += o.v + ' ';
+      row.push(o);
+    }
+    cells.push(row);
+  }
+  (ws['!merges'] || []).forEach(function (m) {
+    if (m.s.r >= nr || m.s.c >= nc) return;
+    var top = cells[m.s.r][m.s.c];
+    top.rs = Math.min(m.e.r, nr - 1) - m.s.r + 1;
+    top.cs = Math.min(m.e.c, nc - 1) - m.s.c + 1;
+    for (var r = m.s.r; r <= Math.min(m.e.r, nr - 1); r++)
+      for (var c = m.s.c; c <= Math.min(m.e.c, nc - 1); c++) if (r !== m.s.r || c !== m.s.c) cells[r][c].hide = true;
+  });
+  // عرض الأعمدة وارتفاع الصفوف بالبكسل (مثل الإكسل على ١٠٠٪)
+  var cols = ws['!cols'] || [], rowsI = ws['!rows'] || [], widths = [], heights = [];
+  for (var c = 0; c < nc; c++) {
+    var ci = cols[c] || {};
+    widths.push(ci.hidden ? 0 : Math.round(ci.wpx || (ci.wch ? ci.wch * 7 + 5 : ci.width ? ci.width * 7 : 64)));
+  }
+  for (var r = 0; r < nr; r++) { var ri = rowsI[r] || {}; heights.push(ri.hidden ? 0 : Math.round(ri.hpx || (ri.hpt ? ri.hpt * 4 / 3 : 20))); }
+  // الاتجاه: من إعداد الملف لو موجود، وإلا من اللغة الغالبة
+  var views = (f.book.Workbook && f.book.Workbook.Views) || [], rtl;
+  if (ws['!views'] && ws['!views'][0] && ws['!views'][0].RTL != null) rtl = !!ws['!views'][0].RTL;
+  else if (views[0] && views[0].RTL != null) rtl = !!views[0].RTL;
+  else rtl = (sample.match(/[؀-ۿ]/g) || []).length >= (sample.match(/[A-Za-z]/g) || []).length;
+  return (f.grids[i] = { name: name, cells: cells, nr: nr, nc: nc, widths: widths, heights: heights, rtl: rtl,
+    more: Math.max(0, lr + 1 - nr), sel: { r: 0, c: 0 } });
 }
-
-function isNum(s) { return /^[\s\-+(]*[\d٠-٩][\d٠-٩,.\s%٪)]*$/.test(s); }
 
 function sheetThumb(g) {
   var c = document.createElement('canvas'), cw = 320, ch = 180;
   c.width = cw; c.height = ch;
   var x = c.getContext('2d');
   x.fillStyle = '#fff'; x.fillRect(0, 0, cw, ch);
-  var rh = 20, nc = Math.max(1, Math.min(g.cols, 5)), colW = cw / nc;
-  x.font = '11px sans-serif'; x.textBaseline = 'middle'; x.direction = g.rtl ? 'rtl' : 'ltr';
-  for (var r = 0; r < Math.min(g.rows.length, 9); r++) {
-    x.fillStyle = r === 0 ? '#0B3450' : r % 2 ? '#fff' : '#f1f4f8';
-    x.fillRect(0, r * rh, cw, rh);
-    for (var ci = 0; ci < nc; ci++) {
-      var px = g.rtl ? cw - (ci + 1) * colW : ci * colW;
-      x.strokeStyle = '#d9dee5'; x.strokeRect(px, r * rh, colW, rh);
-      x.fillStyle = r === 0 ? '#fff' : '#222';
-      x.save(); x.beginPath(); x.rect(px + 3, r * rh, colW - 6, rh); x.clip();
-      x.textAlign = g.rtl ? 'right' : 'left';
-      x.fillText(g.rows[r][ci] || '', g.rtl ? px + colW - 4 : px + 4, r * rh + rh / 2);
+  var rh = 18, hw = 22, nc = Math.max(1, Math.min(g.nc, 5)), colW = (cw - hw) / nc;
+  x.font = '10px sans-serif'; x.textBaseline = 'middle'; x.direction = g.rtl ? 'rtl' : 'ltr';
+  for (var r = -1; r < Math.min(g.nr, 9); r++) {
+    for (var ci = -1; ci < nc; ci++) {
+      var w = ci < 0 ? hw : colW, px = ci < 0 ? (g.rtl ? cw - hw : 0) : g.rtl ? cw - hw - (ci + 1) * colW : hw + ci * colW, py = (r + 1) * rh;
+      var head = r < 0 || ci < 0, cell = head ? null : g.cells[r][ci];
+      x.fillStyle = head ? '#f3f3f3' : cell.bg || '#fff'; x.fillRect(px, py, w, rh);
+      x.strokeStyle = '#d4d4d4'; x.strokeRect(px, py, w, rh);
+      var t = r < 0 ? (ci < 0 ? '' : colName(ci)) : ci < 0 ? String(r + 1) : cell.hide ? '' : cell.v;
+      if (!t) continue;
+      x.fillStyle = head ? '#666' : '#222';
+      x.save(); x.beginPath(); x.rect(px + 2, py, w - 4, rh); x.clip();
+      x.textAlign = head ? 'center' : g.rtl ? 'right' : 'left';
+      x.fillText(t, head ? px + w / 2 : g.rtl ? px + w - 3 : px + 3, py + rh / 2);
       x.restore();
     }
   }
   return c.toDataURL('image/jpeg', .8);
 }
 
-// يبني جدول الورقة الحالية داخل الصفحة
-function buildSheet(g) {
+// يبني الورقة: جدول بحروف الأعمدة وأرقام الصفوف، ومقاسات الملف مضروبة في التكبير
+function buildSheet(g, k) {
+  var wrap = document.createElement('div');
+  wrap.className = 'xl';
+  if (!g.nr) { wrap.innerHTML = '<div class="sheet-empty"></div>'; wrap.firstChild.textContent = 'الورقة «' + g.name + '» فارغة'; return wrap; }
   var t = document.createElement('table');
   t.dir = g.rtl ? 'rtl' : 'ltr';
-  if (!g.rows.length) {
-    var d = document.createElement('div');
-    d.className = 'sheet-empty';
-    d.textContent = 'الورقة «' + g.name + '» فارغة';
-    return d;
+  var cg = document.createElement('colgroup'), total = Math.round(46 * k);
+  cg.innerHTML = '<col style="width:' + Math.round(46 * k) + 'px">';
+  g.widths.forEach(function (w) { var px = Math.round(w * k); total += px; cg.insertAdjacentHTML('beforeend', '<col style="width:' + px + 'px">'); });
+  t.appendChild(cg);
+  t.style.width = total + 'px';
+  var head = '<thead><tr><th class="corner"></th>';
+  for (var c = 0; c < g.nc; c++) head += '<th class="ch" data-c="' + c + '">' + colName(c) + '</th>';
+  t.insertAdjacentHTML('beforeend', head + '</tr></thead>');
+  var tb = document.createElement('tbody'), html = '';
+  for (var r = 0; r < g.nr; r++) {
+    var h = g.heights[r];
+    html += '<tr' + (h === 0 ? ' class="hid"' : '') + ' style="height:' + Math.round((h || 20) * k) + 'px"><th class="rh" data-r="' + r + '">' + (r + 1) + '</th>';
+    for (var c = 0; c < g.nc; c++) {
+      var o = g.cells[r][c];
+      if (o.hide) continue;
+      html += '<td data-r="' + r + '" data-c="' + c + '"' + (o.rs > 1 ? ' rowspan="' + o.rs + '"' : '') + (o.cs > 1 ? ' colspan="' + o.cs + '"' : '') +
+        (o.num ? ' class="n"' : '') + (o.bg ? ' style="background:' + o.bg + (o.fg ? ';color:' + o.fg + ';font-weight:700' : '') + '"' : '') + '>' + escHtml(o.v) + '</td>';
+    }
+    html += '</tr>';
   }
-  var thead = document.createElement('thead'), tbody = document.createElement('tbody');
-  g.rows.forEach(function (r, ri) {
-    var tr = document.createElement('tr');
-    var rn = document.createElement(ri === 0 ? 'th' : 'td');
-    rn.className = 'rn';
-    rn.textContent = ri === 0 ? '' : ar(g.start + ri + 1);
-    tr.appendChild(rn);
-    r.forEach(function (v) {
-      var c = document.createElement(ri === 0 ? 'th' : 'td');
-      c.textContent = v;
-      if (ri && v && isNum(v)) c.className = 'n';
-      tr.appendChild(c);
-    });
-    (ri === 0 ? thead : tbody).appendChild(tr);
+  tb.innerHTML = html;
+  t.appendChild(tb);
+  wrap.appendChild(t);
+  return wrap;
+}
+
+function escHtml(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+
+// تبويبات الأوراق تحت، وشريط الخلية المختارة فوق
+function drawXlBars(f, g) {
+  $('xltabs').innerHTML = '';
+  $('xltabs').dir = g.rtl ? 'rtl' : 'ltr';
+  f.book.SheetNames.forEach(function (n, i) {
+    var b = document.createElement('div');
+    b.className = 'tab' + (i === cur.page - 1 ? ' on' : '');
+    b.dataset.sheet = i + 1;
+    b.textContent = n;
+    $('xltabs').appendChild(b);
   });
-  t.appendChild(thead);
-  t.appendChild(tbody);
-  return t;
+  showSel(g, false);
+}
+
+function selCell(g) { return pagesEl.querySelector('td[data-r="' + g.sel.r + '"][data-c="' + g.sel.c + '"]'); }
+
+function showSel(g, scrollTo) {
+  Array.prototype.forEach.call(pagesEl.querySelectorAll('.sel, .on'), function (e) { e.classList.remove('sel', 'on'); });
+  var td = selCell(g);
+  if (!td) return;
+  td.classList.add('sel');
+  var cs = +td.colSpan || 1, rs = +td.rowSpan || 1, r = g.sel.r, c = g.sel.c;
+  for (var i = 0; i < cs; i++) { var ch = pagesEl.querySelector('th.ch[data-c="' + (c + i) + '"]'); if (ch) ch.classList.add('on'); }
+  for (var j = 0; j < rs; j++) { var rh = pagesEl.querySelector('th.rh[data-r="' + (r + j) + '"]'); if (rh) rh.classList.add('on'); }
+  $('xladdr').textContent = colName(c) + (r + 1) + (cs > 1 || rs > 1 ? ':' + colName(c + cs - 1) + (r + rs) : '');
+  $('xlval').textContent = g.cells[r][c].v;
+  $('xlval').dir = 'auto';
+  if (scrollTo) {
+    // نخلي الخلية ظاهرة (تحت الشريط وفوق التبويبات وبعد عمود الأرقام)
+    var sr = stage.getBoundingClientRect(), tr = td.getBoundingClientRect();
+    var x = (tr.left - sr.left) / scale, y = (tr.top - sr.top) / scale, w = tr.width / scale, h = tr.height / scale;
+    var hw = 46 * XL_K * cur.zoom + 10, top = 70 + 40 * cur.zoom, bottom = H - 70;
+    var dx = 0, dy = 0;
+    if (y < top) dy = y - top; else if (y + h > bottom) dy = Math.min(y - top, y + h - bottom);
+    var left = g.rtl ? 20 : hw, right = g.rtl ? W - hw : W - 20;
+    if (x < left) dx = x - left; else if (x + w > right) dx = Math.min(x - left, x + w - right);
+    stage.scrollLeft += dx; stage.scrollTop += dy;
+  }
+  scheduleThumb();
+}
+
+// الأسهم في الريموت: تتنقّل بين الخلايا (تتخطّى الخلايا المدموجة)
+function moveSel(dr, dc) {
+  var g = sheetGrid(cur.f, cur.page - 1), r = g.sel.r, c = g.sel.c, top = g.cells[r][c];
+  if (dc && g.rtl) dc = -dc;
+  if (dr > 0) r += top.rs || 1; else if (dr < 0) r -= 1;
+  if (dc > 0) c += top.cs || 1; else if (dc < 0) c -= 1;
+  r = Math.max(0, Math.min(g.nr - 1, r)); c = Math.max(0, Math.min(g.nc - 1, c));
+  // لو وقعنا داخل خلية مدموجة نروح لأولها
+  for (var rr = r; rr >= 0; rr--) for (var cc = c; cc >= 0; cc--) {
+    var o = g.cells[rr][cc];
+    if (!o.hide && rr + (o.rs || 1) > r && cc + (o.cs || 1) > c) { r = rr; c = cc; rr = -1; break; }
+  }
+  g.sel = { r: r, c: c };
+  showSel(g, true);
 }
 
 function loadImage(f) {
@@ -558,18 +650,20 @@ function layout(keep) {
   pagesEl.className = '';
   pagesEl.style.cssText = '';
 
+  $('view').classList.toggle('xlmode', f.kind === 'sheet');
   if (f.kind === 'sheet') {
-    var g = sheetGrid(f, cur.page - 1);
+    var g = sheetGrid(f, cur.page - 1), k = XL_K * z;
     pagesEl.className = 'sheet';
-    pagesEl.style.fontSize = Math.round(30 * z) + 'px';
-    pagesEl.appendChild(buildSheet(g));
+    pagesEl.style.fontSize = Math.round(15 * k) + 'px';
+    pagesEl.appendChild(buildSheet(g, k));
     if (g.more > 0) {
       var more = document.createElement('div');
       more.className = 'sheet-more';
       more.textContent = 'وتبقّى ' + ar(g.more) + ' صفًّا لم تُعرض (الحد الأقصى ' + ar(SHEET_MAX_ROWS) + ')';
       pagesEl.appendChild(more);
     }
-    pagesEl.style.width = Math.max(W, pagesEl.firstChild.offsetWidth + 160) + 'px';
+    pagesEl.style.width = Math.max(W, pagesEl.firstChild.offsetWidth) + 'px';
+    drawXlBars(f, g);
     if (keep) center(fx, fy);
     else { stage.scrollTop = 0; stage.scrollLeft = g.rtl ? stage.scrollWidth - W : 0; }
     return;
@@ -780,6 +874,8 @@ function cmd(c, a) {
       }
       break;
     case 'point': point(a.x, a.y); break;
+    case 'mouse': mouseMove(a.dx || 0, a.dy || 0); break;
+    case 'click': mouseClick(); break;
     case 'ink': ink(a); break;
     case 'undo': if (strokes.length) { strokes.pop(); drawInk(); scheduleThumb(); } break;
     case 'inkclear': clearInk(); scheduleThumb(); break;
@@ -792,13 +888,15 @@ function cmd(c, a) {
 }
 
 // في الإكسل: الضغط على صف من الجوال يلوّنه على الشاشة، والضغط عليه مرة ثانية يشيل اللون
-function markRow(x, y) {
-  var el = document.elementFromPoint(x * W * scale, y * H * scale);
-  var tr = el && el.closest ? el.closest('tbody tr') : null;
-  var old = pagesEl.querySelector('tr.hl');
-  if (old) old.classList.remove('hl');
-  if (tr && tr !== old) tr.classList.add('hl');
-  scheduleThumb();
+// يختار الخلية (أو التبويب) اللي تحت نقطة على الشاشة
+function clickAt(x, y) {
+  var el = document.elementFromPoint(x * scale, y * scale);
+  if (!el || !cur) return false;
+  var tab = el.closest && el.closest('#xltabs .tab');
+  if (tab) { gotoPage(+tab.dataset.sheet); return true; }
+  var td = el.closest && el.closest('#pages.sheet td');
+  if (td) { var g = sheetGrid(cur.f, cur.page - 1); g.sel = { r: +td.dataset.r, c: +td.dataset.c }; showSel(g, false); return true; }
+  return false;
 }
 
 // ── الرسم على الملف ──
@@ -842,9 +940,41 @@ function clearInk() {
   drawInk();
 }
 
+// ── الماوس: الجوال يحرّك مؤشر على الشاشة، والنقرة تختار ──
+var mouse = { x: W / 2, y: H / 2 }, mouseTimer;
+function mouseMove(dx, dy) {
+  if (!cur) return;
+  var m = $('cursor');
+  mouse.x += dx; mouse.y += dy;
+  // لو وصل الطرف، المحتوى يمشي مع المؤشر
+  var ox = 0, oy = 0;
+  if (mouse.x < 0) { ox = mouse.x; mouse.x = 0; } else if (mouse.x > W - 4) { ox = mouse.x - (W - 4); mouse.x = W - 4; }
+  if (mouse.y < 0) { oy = mouse.y; mouse.y = 0; } else if (mouse.y > H - 4) { oy = mouse.y - (H - 4); mouse.y = H - 4; }
+  if (ox || oy) { anim++; stage.scrollLeft += ox * 2; stage.scrollTop += oy * 2; }
+  m.style.transform = 'translate(' + mouse.x + 'px,' + mouse.y + 'px)';
+  m.classList.add('on');
+  clearTimeout(mouseTimer);
+  mouseTimer = setTimeout(function () { m.classList.remove('on'); }, 6000);
+  // تمييز اللي تحت المؤشر
+  var el = document.elementFromPoint(mouse.x * scale, mouse.y * scale), hv = pagesEl.querySelector('.hv');
+  if (hv) hv.classList.remove('hv');
+  var t = el && el.closest && el.closest('#pages.sheet td, #xltabs .tab');
+  if (t) t.classList.add('hv');
+  scheduleThumb();
+}
+function mouseClick() {
+  if (!cur) return;
+  var m = $('cursor');
+  m.classList.add('on', 'click');
+  setTimeout(function () { m.classList.remove('click'); }, 200);
+  clearTimeout(mouseTimer);
+  mouseTimer = setTimeout(function () { m.classList.remove('on'); }, 6000);
+  if (!clickAt(mouse.x, mouse.y)) point(mouse.x / W, mouse.y / H);
+}
+
 var dotTimer;
 function point(x, y) {
-  if (cur && cur.f.kind === 'sheet') markRow(x, y);
+  if (cur && cur.f.kind === 'sheet' && clickAt(x * W, y * H)) return;
   var d = $('dot');
   d.style.left = (x * W) + 'px';
   d.style.top = (y * H) + 'px';
@@ -923,28 +1053,44 @@ function snapshot() {
 
 // صورة الجوال المصغّرة للإكسل: نرسم الخلايا الظاهرة على الشاشة (الجدول ما ينرسم بـ drawImage)
 function snapSheet(g, k, sr) {
+  g.fillStyle = '#e9e9e9'; g.fillRect(0, 0, 480, 270);
   var cells = pagesEl.querySelectorAll('th, td');
-  var fs = parseFloat(pagesEl.style.fontSize) || 30;
+  var fs = parseFloat(pagesEl.style.fontSize) || 24;
   g.textBaseline = 'middle';
   g.font = Math.max(5, fs * k * .9) + 'px sans-serif';
+  var rtl = !!pagesEl.querySelector('table[dir="rtl"]');
   for (var i = 0; i < cells.length; i++) {
     var el = cells[i], r = el.getBoundingClientRect();
     var x = (r.left - sr.left) / scale * k, y = (r.top - sr.top) / scale * k;
     var w = r.width / scale * k, h = r.height / scale * k;
-    if (x > 480 || y > 270 || x + w < 0 || y + h < 0) continue;
-    var head = el.tagName === 'TH', hl = el.parentNode.classList.contains('hl');
-    g.fillStyle = head ? '#0B3450' : hl ? '#ffe58a' : el.className === 'rn' ? '#eef2f6' : '#fff';
+    if (x > 480 || y > 270 || x + w < 0 || y + h < 0 || !w || !h) continue;
+    var head = el.tagName === 'TH';
+    g.fillStyle = head ? (el.classList.contains('on') ? '#d3e7da' : '#f3f3f3') : el.style.background || '#fff';
     g.fillRect(x, y, w, h);
-    g.strokeStyle = '#d9dee5'; g.lineWidth = .5; g.strokeRect(x, y, w, h);
+    g.strokeStyle = '#d4d4d4'; g.lineWidth = .5; g.strokeRect(x, y, w, h);
+    if (el.classList.contains('sel')) { g.strokeStyle = '#107c41'; g.lineWidth = 2; g.strokeRect(x + 1, y + 1, w - 2, h - 2); }
     var t = el.textContent;
     if (!t) continue;
     g.save(); g.beginPath(); g.rect(x + 1, y, w - 2, h); g.clip();
-    g.fillStyle = head ? '#fff' : '#1b2430';
-    var rtl = el.closest('table').dir === 'rtl';
+    g.fillStyle = head ? '#666' : '#1b2430';
     g.direction = rtl ? 'rtl' : 'ltr';
-    g.textAlign = rtl ? 'right' : 'left';
-    g.fillText(t, rtl ? x + w - 3 : x + 3, y + h / 2);
+    g.textAlign = head ? 'center' : rtl ? 'right' : 'left';
+    g.fillText(t, head ? x + w / 2 : rtl ? x + w - 3 : x + 3, y + h / 2);
     g.restore();
+  }
+  // الشريط والتبويبات
+  var bars = ['xlbar', 'xltabs'];
+  bars.forEach(function (id) {
+    var b = $(id).getBoundingClientRect();
+    var y = (b.top - sr.top) / scale * k, h = b.height / scale * k;
+    g.fillStyle = id === 'xlbar' ? '#ffffff' : '#f3f3f3'; g.fillRect(0, y, 480, h);
+    g.fillStyle = '#107c41'; g.font = Math.max(6, h * .5) + 'px sans-serif'; g.textAlign = 'center';
+    g.fillText(id === 'xlbar' ? $('xladdr').textContent + '   ' + $('xlval').textContent.slice(0, 50) : (cur.f.book.SheetNames[cur.page - 1] || ''), 240, y + h / 2);
+  });
+  // المؤشر
+  if ($('cursor').classList.contains('on')) {
+    g.fillStyle = '#000'; g.beginPath(); var mx = mouse.x * k, my = mouse.y * k;
+    g.moveTo(mx, my); g.lineTo(mx, my + 12); g.lineTo(mx + 4, my + 9); g.lineTo(mx + 8, my + 11); g.closePath(); g.fill();
   }
 }
 
@@ -958,6 +1104,10 @@ function onKey(code) {
   if (!k) return false;
   // قائمة الملفات ما تنعرض على الشاشة، فالاختيار من الجوال بس
   if (!cur) { if (k === 'back') exitApp(); return true; }
+  if (cur.f.kind === 'sheet' && /^(left|right|up|down)$/.test(k)) {
+    moveSel(k === 'up' ? -1 : k === 'down' ? 1 : 0, k === 'right' ? 1 : k === 'left' ? -1 : 0);
+    return true;
+  }
   switch (k) {
     case 'right': case 'chdown': step(1); break;
     case 'left': case 'chup': step(-1); break;

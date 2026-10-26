@@ -41,7 +41,7 @@ h1 { font-size: 22px; font-weight: 700; }
 #pick b { display: block; font-size: 19px; }
 #pick small { font-size: 13px; opacity: .75; }
 
-#uploads { margin-top: 10px; display: grid; gap: 8px; }
+#uploads { margin-top: 10px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
 .up { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 10px 14px; font-size: 14px; }
 .up .t { display: flex; justify-content: space-between; gap: 10px; }
 .up .t span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -75,7 +75,11 @@ h1 { font-size: 22px; font-weight: 700; }
 
 .list-h { display: flex; justify-content: space-between; align-items: center; margin: 24px 0 10px; font-size: 17px; font-weight: 700; }
 .list-h button { font-size: 13px; padding: 5px 12px; color: #ffb4b4; }
-#list { display: grid; gap: 8px; }
+#list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.it { min-width: 0; }
+html, body { overflow-x: hidden; }
+#mouse.on { background: var(--teal); color: #04202a; border-color: var(--teal); }
+#mirror.mouse { outline: 2px solid var(--teal); }
 #list .empty { color: var(--faint); font-size: 14px; }
 .it { display: flex; align-items: center; gap: 12px; padding: 8px; border-radius: 14px; background: var(--card); border: 1px solid var(--line); }
 .it.on { border-color: var(--teal); }

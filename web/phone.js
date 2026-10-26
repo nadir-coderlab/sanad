@@ -331,7 +331,7 @@ setInterval(function () { if (files.length && !$('main').hidden) renderList(); }
 function renderCtl() {
   $('ctl').hidden = !cur;
   $('gest').style.opacity = cur ? 1 : 0;
-  if (!cur) { $('idle').hidden = false; if (pen) setPen(false); return; }
+  if (!cur) { $('idle').hidden = false; if (pen) setPen(false); if (mouseMode) setMouse(false); return; }
   var pdf = cur.kind === 'pdf', vid = cur.kind === 'video', sheet = cur.kind === 'sheet';
   $('r-ink').hidden = vid;
   if (vid && pen) setPen(false);
@@ -374,10 +374,23 @@ function setPen(on) {
   $('gest').textContent = on ? 'ارسم بإصبعك على الصورة · «تراجع» يحذف آخر خط' : gestHint();
 }
 function gestHint() {
-  return cur && cur.kind === 'sheet' ? 'اضغط على صف لتمييزه على الشاشة · اسحب للتمرير · يمينًا ويسارًا للتنقل بين الأوراق' :
+  if (mouseMode) return 'حرّك إصبعك لتحريك المؤشر · انقر للضغط · وصّل المؤشر للطرف عشان يمشي الجدول';
+  return cur && cur.kind === 'sheet' ? 'اضغط على خلية لاختيارها · اسحب للتمرير · أو شغّل الماوس' :
     'اسحب يمينًا ويسارًا للتقليب · أعلى وأسفل للتمرير · اضغط مطوّلًا لإظهار المؤشر';
 }
-$('pen').onclick = function () { setPen(!pen); };
+$('pen').onclick = function () { if (mouseMode) setMouse(false); setPen(!pen); };
+
+// ── الماوس: الصورة المصغّرة تصير لوحة لمس، والمؤشر يتحرك على الشاشة ──
+var mouseMode = false;
+function setMouse(on) {
+  mouseMode = on;
+  if (on && pen) setPen(false);
+  $('mouse').classList.toggle('on', on);
+  $('mirror').classList.toggle('mouse', on);
+  $('gest').textContent = gestHint();
+  if (on) cmd('mouse', { dx: 0, dy: 0 });
+}
+$('mouse').onclick = function () { setMouse(!mouseMode); };
 Array.prototype.forEach.call(document.querySelectorAll('#r-ink .col'), function (b) {
   b.onclick = function () {
     penCol = b.dataset.col;
@@ -429,10 +442,12 @@ function inkEnd() {
 (function () {
   var m = $('mirror'), s = null, acc = { x: 0, y: 0 }, flush = null;
   function rel(e) { var r = m.getBoundingClientRect(); return { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height, k: 1920 / r.width }; }
+  var mv = null;
   m.addEventListener('pointerdown', function (e) {
     if (!cur) return;
     m.setPointerCapture(e.pointerId);
     if (pen) { inkStart(rel(e)); return; }
+    if (mouseMode) { mv = { x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, t: Date.now(), ax: 0, ay: 0, k: rel(e).k * 1.3 }; return; }
     var p = rel(e);
     s = { x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, t: Date.now(), moved: false, laser: false, k: p.k };
     s.timer = setTimeout(function () {
@@ -441,6 +456,16 @@ function inkEnd() {
   });
   m.addEventListener('pointermove', function (e) {
     if (stroke) { inkMove(rel(e)); return; }
+    if (mv) {
+      mv.ax += (e.clientX - mv.x) * mv.k; mv.ay += (e.clientY - mv.y) * mv.k;
+      mv.x = e.clientX; mv.y = e.clientY;
+      if (!mv.flush) mv.flush = setTimeout(function () {
+        if (!mv) return;
+        cmd('mouse', { dx: Math.round(mv.ax), dy: Math.round(mv.ay) });
+        mv.ax = mv.ay = 0; mv.flush = null;
+      }, 33);
+      return;
+    }
     if (!s) return;
     var dx = e.clientX - s.x, dy = e.clientY - s.y;
     s.x = e.clientX; s.y = e.clientY;
@@ -457,6 +482,13 @@ function inkEnd() {
   });
   function end(e) {
     if (stroke) { inkMove(rel(e)); inkEnd(); return; }
+    if (mv) {
+      clearTimeout(mv.flush);
+      if (mv.ax || mv.ay) cmd('mouse', { dx: Math.round(mv.ax), dy: Math.round(mv.ay) });
+      if (Math.abs(e.clientX - mv.x0) + Math.abs(e.clientY - mv.y0) < 8 && Date.now() - mv.t < 350) { cmd('click'); if (navigator.vibrate) navigator.vibrate(10); }
+      mv = null;
+      return;
+    }
     if (!s) return;
     clearTimeout(s.timer);
     var dx = e.clientX - s.x0, dy = e.clientY - s.y0, dt = Date.now() - s.t;
