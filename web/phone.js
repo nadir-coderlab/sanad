@@ -1,4 +1,4 @@
-// «الخدمات المساندة» — صفحة الجوال: ترسل الملفات للشاشة وتتحكم فيها.
+// «مكتب الخدمات الصحية المساندة» — صفحة الجوال: ترسل الملفات للشاشة وتتحكم فيها.
 'use strict';
 
 function $(id) { return document.getElementById(id); }
@@ -11,28 +11,28 @@ var KINDS = { pdf: 'PDF', image: 'صورة', video: 'فيديو', sheet: 'Excel'
 var sid = location.hash.slice(1);
 if (sid) localStorage.setItem('sanad-id', sid);
 else sid = localStorage.getItem('sanad-id');
-if (!sid) { $('nolink').hidden = false; pill('bad', 'ما فيه شاشة'); }
+if (!sid) { $('nolink').hidden = false; pill('bad', 'لا توجد شاشة'); }
 // الصفحة الرئيسية ما تطلع إلا بعد ما الشاشة تقبل الرقم السري
 addEventListener('hashchange', function () { location.reload(); });
 
 function pill(cls, text) { var p = $('pill'); p.className = cls; p.lastChild.textContent = text; }
 
 var dev = /iPhone/.test(navigator.userAgent) ? 'آيفون' : /iPad/.test(navigator.userAgent) ? 'آيباد' :
-  /Android/.test(navigator.userAgent) ? 'جوال أندرويد' : /Mac/.test(navigator.userAgent) ? 'ماك' : 'جهاز';
+  /Android/.test(navigator.userAgent) ? 'هاتف أندرويد' : /Mac/.test(navigator.userAgent) ? 'ماك' : 'جهاز';
 
 // ── الاتصال بالشاشة ──
 var peer = null, conn = null, retryTimer = null, openTimer = null;
 
 function start() {
   if (!sid) return;
-  pill('', 'يتصل…');
+  pill('', 'جارٍ الاتصال…');
   peer = new Peer({ debug: 1 });
   peer.on('open', connect);
   peer.on('disconnected', function () { if (!peer.destroyed) setTimeout(function () { if (peer.disconnected) peer.reconnect(); }, 1500); });
   peer.on('error', function (e) {
-    if (e.type === 'peer-unavailable') { pill('bad', 'الشاشة مو شغّالة'); retry(3000); return; }
+    if (e.type === 'peer-unavailable') { pill('bad', 'الشاشة غير متصلة'); retry(3000); return; }
     if (['network', 'server-error', 'socket-error', 'socket-closed'].indexOf(e.type) >= 0) {
-      pill('bad', 'ما فيه إنترنت');
+      pill('bad', 'لا يوجد اتصال بالإنترنت');
       try { peer.destroy(); } catch (x) {}
       setTimeout(start, 3000);
     }
@@ -43,20 +43,20 @@ function connect() {
   clearTimeout(retryTimer);
   if (conn && conn.open) return;
   if (peer.disconnected) { peer.reconnect(); return; }
-  pill('', 'يتصل بالشاشة…');
+  pill('', 'جارٍ الاتصال بالشاشة…');
   var c = peer.connect('sanad-' + sid, { serialization: 'raw', reliable: true, metadata: { dev: dev } });
   conn = c;
   clearTimeout(openTimer);
   openTimer = setTimeout(function () { if (!c.open) { c.close(); retry(500); } }, 15000);
   c.on('open', function () {
     clearTimeout(openTimer);
-    pill('', 'يتحقق…');
+    pill('', 'جارٍ التحقق…');
   });
   c.on('data', function (d) {
     if (typeof d === 'string') { try { onMsg(JSON.parse(d)); } catch (e) {} }
     else if (d instanceof ArrayBuffer) onChunk(d);
   });
-  c.on('close', function () { if (conn === c) { pill('bad', 'انقطع، يعيد الاتصال…'); failActive(); failDl(); retry(1500); } });
+  c.on('close', function () { if (conn === c) { pill('bad', 'انقطع الاتصال، جارٍ إعادة الاتصال…'); failActive(); failDl(); retry(1500); } });
   c.on('error', function () {});
 }
 
@@ -80,7 +80,7 @@ function linkType(c) {
         var l = st.get(pair.localCandidateId), rm = st.get(pair.remoteCandidateId);
         relay = (l && l.candidateType === 'relay') || (rm && rm.candidateType === 'relay');
       }
-      if (c.open) pill('ok', relay ? 'متصل عبر وسيط مشفّر' : 'متصل مباشر');
+      if (c.open) pill('ok', relay ? 'متصل عبر وسيط مشفّر' : 'متصل مباشرةً');
     }).catch(function () {});
   }, 1500);
 }
@@ -124,7 +124,7 @@ function sendPin(p) {
 $('pinform').addEventListener('submit', function (e) {
   e.preventDefault();
   var p = toLatin($('pin').value).replace(/\D/g, '');
-  if (p.length < 4) { $('pinerr').hidden = false; $('pinerr').textContent = 'الرقم ٤ أرقام أو أكثر'; return; }
+  if (p.length < 4) { $('pinerr').hidden = false; $('pinerr').textContent = 'يجب أن يتكوّن الرقم من ٤ أرقام أو أكثر'; return; }
   sendPin(p);
 });
 
@@ -158,16 +158,16 @@ function askAdmin() {
 }
 
 $('nopin').onclick = function () {
-  if (!confirm('تلغي الرقم السري؟ أي أحد يصوّر الباركود بيقدر يدخل ويرسل ويشوف الملفات.')) return;
+  if (!confirm('هل تريد إلغاء الرقم السري؟ سيتمكّن أي شخص يمسح الباركود من الدخول وإرسال الملفات والاطلاع عليها.')) return;
   send({ t: 'setpin', off: true, admin: adminCode });
 };
 
 $('chpin').onclick = function () {
   var a = toLatin(prompt('الرقم السري الجديد (من ٤ إلى ٨ أرقام)') || '').trim();
   if (!a) return;
-  if (!/^\d{4,8}$/.test(a)) { say('الرقم لازم يكون من ٤ إلى ٨ أرقام.'); return; }
-  var b = toLatin(prompt('اكتب الرقم الجديد مرة ثانية للتأكيد') || '').trim();
-  if (a !== b) { say('الرقمين مو متطابقين، ما تغيّر شي.'); return; }
+  if (!/^\d{4,8}$/.test(a)) { say('يجب أن يتكوّن الرقم من ٤ إلى ٨ أرقام.'); return; }
+  var b = toLatin(prompt('أعد إدخال الرقم الجديد للتأكيد') || '').trim();
+  if (a !== b) { say('الرقمان غير متطابقين، ولم يُغيَّر شيء.'); return; }
   pinSent = a;
   send({ t: 'setpin', pin: a, admin: adminCode });
 };
@@ -191,20 +191,20 @@ function onMsg(m) {
   }
   if (m.t === 'pinbad') {
     localStorage.removeItem(pinKey);
-    askPin(m.wait ? 'محاولات كثيرة غلط. انتظر ' + ar(m.wait) + ' ثانية وجرّب.' : 'الرقم السري غلط.');
+    askPin(m.wait ? 'محاولات خاطئة كثيرة. انتظر ' + ar(m.wait) + ' ثانية ثم أعد المحاولة.' : 'الرقم السري غير صحيح.');
     return;
   }
   if (m.t === 'pinset') {
-    if (m.ok && m.open) { localStorage.removeItem(pinKey); say('انلغى الرقم السري ✓ ورقمك يبقى رمز الإدارة.', 5000); }
-    else if (m.ok) { localStorage.setItem(pinKey, pinSent); adminCode = pinSent; say('تغيّر الرقم السري ✓ بلّغ فريقك بالرقم الجديد.', 5000); }
-    else if (m.bad) { adminCode = ''; renderPinUi(); say('رمز الإدارة غلط.'); }
-    else if (m.wait) say('محاولات كثيرة غلط. انتظر ' + ar(m.wait) + ' ثانية.');
-    else say('ما تغيّر الرقم. لازم يكون من ٤ إلى ٨ أرقام.');
+    if (m.ok && m.open) { localStorage.removeItem(pinKey); say('أُلغي الرقم السري ✓ ويبقى رقمك رمزًا للإدارة.', 5000); }
+    else if (m.ok) { localStorage.setItem(pinKey, pinSent); adminCode = pinSent; say('تم تغيير الرقم السري ✓ أبلغ فريقك بالرقم الجديد.', 5000); }
+    else if (m.bad) { adminCode = ''; renderPinUi(); say('رمز الإدارة غير صحيح.'); }
+    else if (m.wait) say('محاولات خاطئة كثيرة. انتظر ' + ar(m.wait) + ' ثانية.');
+    else say('لم يُغيَّر الرقم. يجب أن يتكوّن من ٤ إلى ٨ أرقام.');
     return;
   }
   if (m.t === 'adminres') {
-    if (m.ok) { pinOpen = !!m.open; renderPinUi(); say('أزرار الرقم السري ظهرت تحت. ضغط مطوّل ثاني على العنوان يخفيها.', 4000); }
-    else { adminCode = ''; renderPinUi(); say(m.wait ? 'محاولات كثيرة غلط. انتظر ' + ar(m.wait) + ' ثانية.' : 'رمز الإدارة غلط.'); }
+    if (m.ok) { pinOpen = !!m.open; renderPinUi(); say('ظهرت أزرار الرقم السري في الأسفل. اضغط مطوّلًا على العنوان مرة أخرى لإخفائها.', 4000); }
+    else { adminCode = ''; renderPinUi(); say(m.wait ? 'محاولات خاطئة كثيرة. انتظر ' + ar(m.wait) + ' ثانية.' : 'رمز الإدارة غير صحيح.'); }
     return;
   }
   if (m.t === 'pinmode') { pinOpen = !!m.open; if (pinOpen) localStorage.removeItem(pinKey); renderPinUi(); return; }
@@ -226,7 +226,7 @@ function onMsg(m) {
     var d = upById(m.id);
     if (d) {
       d.state = 'done'; d.acked = d.size; drawUp(d); setTimeout(function () { removeUp(d); }, 2500);
-      say('وصل «' + d.name + '». اضغط عليه تحت عشان يطلع على الشاشة.', 5000);
+      say('وصل «' + d.name + '». اضغط عليه في القائمة لعرضه على الشاشة.', 5000);
     }
     if (waitDone) { waitDone(); waitDone = null; }
   }
@@ -235,7 +235,7 @@ function onMsg(m) {
     if (!m.size) finishDl();
     else drawDl(m.id);
   }
-  else if (m.t === 'nofile') { dl = null; say('الملف انمسح من الشاشة.'); renderList(); }
+  else if (m.t === 'nofile') { dl = null; say('حُذف الملف من الشاشة.'); renderList(); }
 }
 
 // ── تنزيل ملف من الشاشة للجوال ──
@@ -254,13 +254,13 @@ function finishDl() {
   dl = null;
   saved[d.id] = new File(d.parts, d.name, { type: d.type });
   renderList();
-  say('نزل «' + d.name + '». اضغط «حفظ» عشان تحفظه في جوالك.', 5000);
+  say('نُزِّل «' + d.name + '». اضغط «حفظ» لحفظه في هاتفك.', 5000);
 }
 
 function failDl() {
   if (!dl) return;
   dl = null;
-  say('انقطع التنزيل، جرّب مرة ثانية.');
+  say('انقطع التنزيل، أعد المحاولة.');
   renderList();
 }
 
@@ -277,7 +277,7 @@ function drawDl(id) {
 
 function download(f) {
   if (saved[f.id]) { saveFile(saved[f.id]); return; }
-  if (dl) { say('فيه ملف ينزل الحين، انتظره يخلص.'); return; }
+  if (dl) { say('يجري تنزيل ملف الآن، انتظر حتى يكتمل.'); return; }
   dl = { id: f.id, name: f.name, size: f.size, parts: [], got: 0 };
   send({ t: 'get', id: f.id });
   drawDl(f.id);
@@ -301,7 +301,7 @@ function plainSave(file) {
 function renderList() {
   var box = $('list');
   $('clear').hidden = !files.length;
-  if (!files.length) { box.innerHTML = '<div class="empty">ما فيه ملفات على الشاشة.</div>'; return; }
+  if (!files.length) { box.innerHTML = '<div class="empty">لا توجد ملفات على الشاشة.</div>'; return; }
   box.innerHTML = '';
   files.slice().reverse().forEach(function (f) {
     var d = document.createElement('div');
@@ -323,8 +323,8 @@ function renderList() {
 // كل ملف ينحذف من الشاشة لحاله بعد ٢٤ ساعة من وصوله
 function leftText(f) {
   var m = Math.max(0, Math.round((f.expAt - Date.now()) / 60000));
-  if (m >= 60) return 'ينحذف بعد ' + ar(Math.ceil(m / 60)) + ' س';
-  return m ? 'ينحذف بعد ' + ar(m) + ' د' : 'ينحذف الحين';
+  if (m >= 60) return 'يُحذف بعد ' + ar(Math.ceil(m / 60)) + ' س';
+  return m ? 'يُحذف بعد ' + ar(m) + ' د' : 'يُحذف الآن';
 }
 setInterval(function () { if (files.length && !$('main').hidden) renderList(); }, 60000);
 
@@ -341,7 +341,7 @@ function renderCtl() {
   $('r-doc').hidden = vid;
   $('r-vid').hidden = !vid;
   $('mode').hidden = !pdf;
-  $('mode').textContent = cur.mode === 'doc' ? 'وضع السلايدات' : 'وضع التقرير';
+  $('mode').textContent = cur.mode === 'doc' ? 'وضع الشرائح' : 'وضع التقرير';
   $('play').textContent = cur.playing ? 'إيقاف' : 'تشغيل';
   $('mute').textContent = cur.muted ? 'صوت' : 'كتم';
 }
@@ -360,7 +360,7 @@ $('pg').onclick = function () {
   var n = parseInt(String(prompt((cur.kind === 'sheet' ? 'رقم الورقة' : 'رقم الصفحة') + ' (من ١ إلى ' + ar(cur.pages) + ')') || '').replace(/[٠-٩]/g, function (d) { return '٠١٢٣٤٥٦٧٨٩'.indexOf(d); }), 10);
   if (n) cmd('goto', { page: n });
 };
-$('clear').onclick = function () { if (confirm('تمسح كل الملفات من الشاشة؟')) cmd('clear'); };
+$('clear').onclick = function () { if (confirm('هل تريد حذف جميع الملفات من الشاشة؟')) cmd('clear'); };
 
 // ── القلم: الرسم على الصورة المصغّرة يطلع على الشاشة ──
 var pen = false, penCol = 'red', stroke = null, inkSeq = 0;
@@ -371,11 +371,11 @@ function setPen(on) {
   pen = on;
   $('pen').classList.toggle('on', on);
   $('mirror').classList.toggle('pen', on);
-  $('gest').textContent = on ? 'ارسم بإصبعك على الصورة · «تراجع» يمسح آخر خط' : gestHint();
+  $('gest').textContent = on ? 'ارسم بإصبعك على الصورة · «تراجع» يحذف آخر خط' : gestHint();
 }
 function gestHint() {
-  return cur && cur.kind === 'sheet' ? 'اضغط على صف عشان يتلوّن على الشاشة · اسحب للتمرير · يمين ويسار للأوراق' :
-    'اسحب يمين ويسار للتقليب · فوق وتحت للتمرير · اضغط مطوّل للمؤشر';
+  return cur && cur.kind === 'sheet' ? 'اضغط على صف لتمييزه على الشاشة · اسحب للتمرير · يمينًا ويسارًا للتنقل بين الأوراق' :
+    'اسحب يمينًا ويسارًا للتقليب · أعلى وأسفل للتمرير · اضغط مطوّلًا لإظهار المؤشر';
 }
 $('pen').onclick = function () { setPen(!pen); };
 Array.prototype.forEach.call(document.querySelectorAll('#r-ink .col'), function (b) {
@@ -482,7 +482,7 @@ $('file').addEventListener('change', function (e) {
   e.target.value = '';
   list.forEach(function (f) {
     if (/\.(docx?|pptx?|key|pages|numbers)$/i.test(f.name)) {
-      say('«' + f.name + '» ما ينعرض كذا. افتحه في تطبيقه وصدّره PDF (مشاركة ← تصدير أو طباعة ← PDF) وأرسله.', 7000);
+      say('«' + f.name + '» لا يمكن عرضه مباشرة. افتحه في تطبيقه وصدّره بصيغة PDF (مشاركة ← تصدير أو طباعة ← PDF) ثم أرسله.', 7000);
       return;
     }
     var u = { id: Date.now().toString(36) + (seq++), file: f, name: f.name, size: f.size, type: f.type, sent: 0, acked: 0, state: 'wait' };
@@ -510,8 +510,8 @@ function drawUp(u) {
   el.querySelector('.t span').textContent = u.name;
   var pct = u.size ? Math.floor(u.acked / u.size * 100) : 100;
   el.querySelector('.t span:last-child').textContent =
-    u.state === 'wait' ? 'بالانتظار' : u.state === 'prep' ? 'يجهّز…' : u.state === 'done' ? 'وصل ✓' :
-    u.state === 'err' ? 'ما وصل · اضغط لإعادة الإرسال' : ar(pct) + '٪';
+    u.state === 'wait' ? 'بالانتظار' : u.state === 'prep' ? 'جارٍ التجهيز…' : u.state === 'done' ? 'وصل ✓' :
+    u.state === 'err' ? 'لم يصل · اضغط لإعادة الإرسال' : ar(pct) + '٪';
   el.querySelector('.bar i').style.width = (u.state === 'done' ? 100 : pct) + '%';
 }
 function removeUp(u) { var el = $('up-' + u.id); if (el) el.remove(); delete doneUps[u.id]; }

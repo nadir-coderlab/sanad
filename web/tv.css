@@ -19,7 +19,7 @@ html, body { width: 100vw; height: 100vh; overflow: hidden; background: #050d1a;
   linear-gradient(160deg, #0d2c52 0%, #081a33 55%, #050d1a 100%); }
 #brand { position: absolute; top: 250px; right: 120px; width: 980px; }
 #clock { font-size: 30px; font-weight: 500; color: var(--faint); margin-bottom: 40px; }
-h1 { font-size: 108px; font-weight: 700; line-height: 1.05; }
+h1 { font-size: 72px; font-weight: 700; line-height: 1.05; white-space: nowrap; }
 .sub { font-size: 38px; color: var(--soft); margin-top: 18px; }
 #steps { list-style: none; margin-top: 64px; display: grid; gap: 26px; }
 #steps li { display: flex; align-items: center; gap: 26px; font-size: 34px; font-weight: 500; }

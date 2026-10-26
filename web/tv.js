@@ -1,4 +1,4 @@
-// «الخدمات المساندة» — صفحة الشاشة.
+// «مكتب الخدمات الصحية المساندة» — صفحة الشاشة.
 // تعرض باركود، والجوال يتصل فيها مباشرة عبر WebRTC (PeerJS) ويرسل الملفات والأوامر.
 // الملفات تنحفظ في ذاكرة الشاشة بس، وتنمسح لما يتقفل التطبيق.
 'use strict';
@@ -55,25 +55,25 @@ function setStatus(cls, text) {
 }
 function updateStatus() {
   if (!online) return;
-  setStatus('ok', conns.length ? 'متصل: ' + ar(conns.length) + (conns.length === 1 ? ' جهاز' : ' أجهزة') : 'جاهزة · بانتظار جوالك');
+  setStatus('ok', conns.length ? 'متصل: ' + ar(conns.length) + (conns.length === 1 ? ' جهاز' : ' أجهزة') : 'جاهزة · بانتظار هاتفك');
 }
 
 function startPeer() {
   restarting = false;
   online = false;
-  setStatus('', 'يتصل…');
+  setStatus('', 'جارٍ الاتصال…');
   peer = new Peer('sanad-' + sid, { debug: 1 });
   peer.on('open', function () { online = true; updateStatus(); });
   peer.on('connection', onConn);
   peer.on('disconnected', function () {
     online = false;
-    setStatus('bad', 'انقطع الاتصال، يعيد المحاولة…');
+    setStatus('bad', 'انقطع الاتصال، جارٍ إعادة المحاولة…');
     setTimeout(function () { if (peer && !peer.destroyed && peer.disconnected) peer.reconnect(); }, 2000);
   });
   peer.on('error', function (e) {
     if (e.type === 'peer-unavailable') return;
     online = false;
-    setStatus('bad', e.type === 'unavailable-id' ? 'يجهّز الاتصال…' : 'ما فيه اتصال بالإنترنت، يعيد المحاولة…');
+    setStatus('bad', e.type === 'unavailable-id' ? 'جارٍ تجهيز الاتصال…' : 'لا يوجد اتصال بالإنترنت، جارٍ إعادة المحاولة…');
     restart(e.type === 'unavailable-id' ? 6000 : 4000);
   });
 }
@@ -180,10 +180,10 @@ function broadcast(m) { var s = JSON.stringify(m); conns.forEach(function (c) { 
 function onMsg(conn, m) {
   if (m.t === 'file') {
     conn.rx = { id: m.id, name: m.name, type: m.type, size: m.size, parts: [], got: 0, acked: 0 };
-    if (!cur) toast('يستقبل ملف…');
+    if (!cur) toast('جارٍ استقبال ملف…');
     if (!m.size) finishRx(conn);
   } else if (m.t === 'cancel') {
-    if (conn.rx && conn.rx.id === m.id) { conn.rx = null; if (!cur) toast('انلغى الإرسال', 2000); }
+    if (conn.rx && conn.rx.id === m.id) { conn.rx = null; if (!cur) toast('أُلغي الإرسال', 2000); }
   } else if (m.t === 'cmd') {
     cmd(m.c, m);
   } else if (m.t === 'get') {
@@ -231,7 +231,7 @@ function onChunk(conn, buf) {
   if (rx.got - rx.acked >= 262144 || rx.got >= rx.size) {
     rx.acked = rx.got;
     send(conn, { t: 'ack', id: rx.id, got: rx.got });
-    if (!cur) toast('يستقبل ملف…  ' + ar(Math.floor(rx.got / rx.size * 100)) + '٪');
+    if (!cur) toast('جارٍ استقبال ملف…  ' + ar(Math.floor(rx.got / rx.size * 100)) + '٪');
   }
   if (rx.got >= rx.size) finishRx(conn);
 }
@@ -259,7 +259,7 @@ function byId(id) { for (var i = 0; i < files.length; i++) if (files[i].id === i
 
 function addFile(id, name, type, blob) {
   var kind = kindOf(name, type);
-  if (!kind) { hideToast(); broadcast({ t: 'say', text: 'هالنوع ما ينعرض: ' + name }); return; }
+  if (!kind) { hideToast(); broadcast({ t: 'say', text: 'هذا النوع لا يمكن عرضه: ' + name }); return; }
   if (byId(id)) removeFile(id);
   var f = { id: id, name: name.replace(/\.[^.]+$/, ''), file: name, type: type || blob.type, kind: kind, size: blob.size, blob: blob, added: Date.now(),
             url: URL.createObjectURL(blob), pages: 1, thumb: '', last: 1 };
@@ -278,7 +278,7 @@ function addFile(id, name, type, blob) {
   }).catch(function (e) {
     URL.revokeObjectURL(f.url);
     hideToast();
-    broadcast({ t: 'say', text: e && e.name === 'PasswordException' ? 'الملف محمي بكلمة سر: ' + f.name : 'ما قدرت أفتح الملف: ' + f.name });
+    broadcast({ t: 'say', text: e && e.name === 'PasswordException' ? 'الملف محمي بكلمة مرور: ' + f.name : 'تعذّر فتح الملف: ' + f.name });
   });
 }
 
@@ -420,7 +420,7 @@ function buildSheet(g) {
   if (!g.rows.length) {
     var d = document.createElement('div');
     d.className = 'sheet-empty';
-    d.textContent = 'الورقة «' + g.name + '» فاضية';
+    d.textContent = 'الورقة «' + g.name + '» فارغة';
     return d;
   }
   var thead = document.createElement('thead'), tbody = document.createElement('tbody');
@@ -495,7 +495,7 @@ function renderPage(f, n, px) {
 function renderShelf() {
   var box = $('files');
   box.innerHTML = '';
-  if (!files.length) { box.innerHTML = '<div class="empty">ما فيه ملفات بعد. أرسل أول ملف من جوالك.</div>'; $('hint').hidden = true; return; }
+  if (!files.length) { box.innerHTML = '<div class="empty">لا توجد ملفات بعد. أرسل أول ملف من هاتفك.</div>'; $('hint').hidden = true; return; }
   $('hint').hidden = false;
   var list = files.slice().reverse();     // الأحدث أول
   focusIdx = Math.max(0, Math.min(focusIdx, list.length - 1));
@@ -566,7 +566,7 @@ function layout(keep) {
     if (g.more > 0) {
       var more = document.createElement('div');
       more.className = 'sheet-more';
-      more.textContent = 'وفيه ' + ar(g.more) + ' صف بعد ما انعرضت (الحد ' + ar(SHEET_MAX_ROWS) + ')';
+      more.textContent = 'وتبقّى ' + ar(g.more) + ' صفًّا لم تُعرض (الحد الأقصى ' + ar(SHEET_MAX_ROWS) + ')';
       pagesEl.appendChild(more);
     }
     pagesEl.style.width = Math.max(W, pagesEl.firstChild.offsetWidth + 160) + 'px';
@@ -979,7 +979,10 @@ addEventListener('keydown', function (e) { if (onKey(e.keyCode)) e.preventDefaul
 // غلاف التطبيق على سامسونج يرسل لنا أزرار الريموت
 addEventListener('message', function (e) { if (e.data && e.data.sanadKey) onKey(e.data.sanadKey); });
 
-function exitApp() { if (parent !== window) parent.postMessage({ sanad: 'exit' }, '*'); }
+function exitApp() {
+  if (parent !== window) parent.postMessage({ sanad: 'exit' }, '*');   // غلاف سامسونج وإل جي
+  else if (window.SanadAndroid) window.SanadAndroid.exit();            // تطبيق أندرويد
+}
 
 // ── رسالة عابرة أعلى الشاشة ──
 var toastTimer;

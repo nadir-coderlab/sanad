@@ -6,26 +6,26 @@
 <meta name="theme-color" content="#081a33">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="المساندة">
+<meta name="apple-mobile-web-app-title" content="مكتب المساندة">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.json">
-<title>الخدمات المساندة</title>
+<title>مكتب الخدمات الصحية المساندة</title>
 <link rel="stylesheet" href="phone.css">
 </head>
 <body>
 <header>
-  <h1>الخدمات المساندة</h1>
-  <div id="pill"><i></i><span>يتصل…</span></div>
+  <h1>مكتب الخدمات الصحية المساندة</h1>
+  <div id="pill"><i></i><span>جارٍ الاتصال…</span></div>
 </header>
 
 <section id="nolink" hidden>
   <div class="big-ic">⌗</div>
-  <p>شغّل تطبيق <b>الخدمات المساندة</b> على الشاشة، وصوّر الباركود اللي يطلع فيه بكاميرا الجوال.</p>
+  <p>شغّل تطبيق <b>مكتب الخدمات الصحية المساندة</b> على الشاشة، ثم امسح الباركود الظاهر فيه بكاميرا هاتفك.</p>
 </section>
 
 <section id="pinbox" hidden>
   <div class="big-ic">🔒</div>
-  <p><b>اكتب الرقم السري</b><br><small>الرقم عند صاحب الشاشة</small></p>
+  <p><b>أدخل الرقم السري</b><br><small>اطلب الرقم من مسؤول الشاشة</small></p>
   <form id="pinform" autocomplete="off">
     <input id="pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="off" placeholder="••••">
     <button id="pingo" type="submit">دخول</button>
@@ -37,15 +37,15 @@
   <label id="pick">
     <input id="file" type="file" multiple accept="application/pdf,.pdf,image/*,video/*,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.xlsm,.csv,.ods,.key,.pages">
     <span class="plus">＋</span>
-    <span><b>أرسل ملف للشاشة</b><small>PDF · Excel · صور · فيديو</small></span>
+    <span><b>أرسل ملفًا إلى الشاشة</b><small>PDF · Excel · صور · فيديو</small></span>
   </label>
   <div id="uploads"></div>
 
   <div id="mirror">
     <img id="thumb" alt="">
     <canvas id="draft"></canvas>
-    <div id="idle">الشاشة على القائمة الرئيسية<br><small>اختر ملف من تحت أو أرسل ملف جديد</small></div>
-    <div id="gest">اسحب يمين ويسار للتقليب · فوق وتحت للتمرير · اضغط مطوّل للمؤشر</div>
+    <div id="idle">الشاشة في الصفحة الرئيسية<br><small>اختر ملفًا من القائمة أدناه أو أرسل ملفًا جديدًا</small></div>
+    <div id="gest">اسحب يمينًا ويسارًا للتقليب · أعلى وأسفل للتمرير · اضغط مطوّلًا لإظهار المؤشر</div>
   </div>
 
   <div id="ctl" hidden>
@@ -83,8 +83,8 @@
 
   <div class="list-h"><span>الملفات على الشاشة</span><button id="clear" hidden>مسح الكل</button></div>
   <div id="list"></div>
-  <p class="note">الملفات تنتقل من جوالك للشاشة مباشرة ومشفّرة، وما تنحفظ على أي سيرفر. وتنمسح من الشاشة بعد ٢٤ ساعة، أو لما يتقفل التطبيق.
-    وقائمة الملفات تطلع هنا بس، والشاشة ما تعرض إلا اللي تختاره.</p>
+  <p class="note">تنتقل الملفات من هاتفك إلى الشاشة مباشرةً وبشكل مشفّر، ولا تُحفظ على أي خادم، وتُحذف من الشاشة بعد ٢٤ ساعة أو عند إغلاق التطبيق.
+    تظهر قائمة الملفات هنا فقط، ولا تعرض الشاشة إلا ما تختاره.</p>
   <button id="chpin" class="chpin" hidden>تغيير الرقم السري</button>
   <button id="nopin" class="chpin" hidden>إلغاء الرقم السري</button>
 </main>

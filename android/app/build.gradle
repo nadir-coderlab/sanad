@@ -1,0 +1,51 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.nadircoderlab.sanad'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.nadircoderlab.sanad"
+        minSdk 21
+        targetSdk 34
+        // رقم البناء من GitHub Actions، عشان كل نسخة جديدة تقدر تنثبّت فوق القديمة
+        versionCode((System.getenv('GITHUB_RUN_NUMBER') ?: '1').toInteger())
+        versionName "1.0." + (System.getenv('GITHUB_RUN_NUMBER') ?: '0')
+    }
+
+    // مفتاح التوقيع من أسرار المستودع (ما ينحفظ في الكود): نفس المفتاح كل مرة
+    // عشان التحديث ينثبّت فوق القديم بدون حذف
+    signingConfigs {
+        release {
+            storeFile file(System.getenv('SANAD_KEYSTORE') ?: 'missing.keystore')
+            storePassword System.getenv('SANAD_KEYSTORE_PASSWORD') ?: ''
+            keyAlias 'sanad'
+            keyPassword System.getenv('SANAD_KEYSTORE_PASSWORD') ?: ''
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+// النسخة الاحتياطية (لو ما فيه نت) تنسخ من صفحة الشاشة نفسها: web/ → assets/web/
+tasks.register('syncWebAssets', Copy) {
+    def assetsDir = new File(projectDir, 'src/main/assets/web')
+    doFirst { assetsDir.deleteDir() }
+    from(new File(rootProject.projectDir, '../web')) {
+        include 'tv.html', 'tv.css', 'tv.js', 'fonts/**', 'vendor/**', 'img/**'
+    }
+    into assetsDir
+}
+tasks.named('preBuild') { dependsOn 'syncWebAssets' }

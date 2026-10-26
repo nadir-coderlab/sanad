@@ -1,6 +1,6 @@
 {
-  "name": "الخدمات المساندة",
-  "short_name": "المساندة",
+  "name": "مكتب الخدمات الصحية المساندة",
+  "short_name": "الخدمات الصحية",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#081a33",

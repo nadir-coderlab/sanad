@@ -2,7 +2,7 @@
 <widget xmlns="http://www.w3.org/ns/widgets" xmlns:tizen="http://tizen.org/ns/widgets" id="http://nadir-coderlab.github.io/sanad" version="1.0.0" viewmodes="maximized">
     <tizen:application id="SndSrv0001.Sanad" package="SndSrv0001" required_version="5.0"/>
     <content src="index.html"/>
-    <name>الخدمات المساندة</name>
+    <name>مكتب الخدمات الصحية المساندة</name>
     <icon src="icon.png"/>
     <access origin="*" subdomains="true"/>
     <tizen:privilege name="http://tizen.org/privilege/internet"/>
