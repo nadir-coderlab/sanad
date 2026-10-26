@@ -5,7 +5,7 @@ function $(id) { return document.getElementById(id); }
 function ar(n) { return String(n).replace(/\d/g, function (d) { return '٠١٢٣٤٥٦٧٨٩'[d]; }); }
 function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
-var KINDS = { pdf: 'PDF', image: 'صورة', video: 'فيديو' };
+var KINDS = { pdf: 'PDF', image: 'صورة', video: 'فيديو', sheet: 'Excel' };
 
 // رقم الشاشة يجي من الباركود، ونحفظه عشان المرة الجاية تفتح على طول
 var sid = location.hash.slice(1);
@@ -261,7 +261,7 @@ function renderList() {
     d.className = 'it' + (cur && cur.id === f.id ? ' on' : '');
     d.innerHTML = (f.thumb ? '<img src="' + f.thumb + '">' : '<div class="ph"></div>') +
       '<div class="x"><b>' + esc(f.name) + '</b><span>' + KINDS[f.kind] +
-      (f.kind === 'pdf' ? ' · ' + ar(f.pages) + ' صفحة' : '') + '</span></div>' +
+      (f.kind === 'pdf' ? ' · ' + ar(f.pages) + ' صفحة' : f.kind === 'sheet' && f.pages > 1 ? ' · ' + ar(f.pages) + ' أوراق' : '') + '</span></div>' +
       '<button class="dl" data-id="' + esc(f.id) + '">' + dlLabel(f.id) + '</button><button class="del">حذف</button>';
     d.onclick = function (e) {
       if (e.target.classList.contains('del')) cmd('delete', { id: f.id });
@@ -276,10 +276,12 @@ function renderCtl() {
   $('ctl').hidden = !cur;
   $('gest').style.opacity = cur ? 1 : 0;
   if (!cur) { $('idle').hidden = false; if (pen) setPen(false); return; }
-  var pdf = cur.kind === 'pdf', vid = cur.kind === 'video';
+  var pdf = cur.kind === 'pdf', vid = cur.kind === 'video', sheet = cur.kind === 'sheet';
   $('r-ink').hidden = vid;
   if (vid && pen) setPen(false);
-  $('pg').textContent = pdf ? ar(cur.page) + ' / ' + ar(cur.pages) : KINDS[cur.kind];
+  $('pg').textContent = pdf ? ar(cur.page) + ' / ' + ar(cur.pages) :
+    sheet && cur.pages > 1 ? 'ورقة ' + ar(cur.page) + ' / ' + ar(cur.pages) : KINDS[cur.kind];
+  if (!pen) $('gest').textContent = gestHint();
   $('r-doc').hidden = vid;
   $('r-vid').hidden = !vid;
   $('mode').hidden = !pdf;
@@ -298,8 +300,8 @@ Array.prototype.forEach.call(document.querySelectorAll('#ctl button[data-c]'), f
   });
 });
 $('pg').onclick = function () {
-  if (!cur || cur.kind !== 'pdf') return;
-  var n = parseInt(String(prompt('رقم الصفحة (من ١ إلى ' + ar(cur.pages) + ')') || '').replace(/[٠-٩]/g, function (d) { return '٠١٢٣٤٥٦٧٨٩'.indexOf(d); }), 10);
+  if (!cur || (cur.kind !== 'pdf' && !(cur.kind === 'sheet' && cur.pages > 1))) return;
+  var n = parseInt(String(prompt((cur.kind === 'sheet' ? 'رقم الورقة' : 'رقم الصفحة') + ' (من ١ إلى ' + ar(cur.pages) + ')') || '').replace(/[٠-٩]/g, function (d) { return '٠١٢٣٤٥٦٧٨٩'.indexOf(d); }), 10);
   if (n) cmd('goto', { page: n });
 };
 $('clear').onclick = function () { if (confirm('تمسح كل الملفات من الشاشة؟')) cmd('clear'); };
@@ -313,7 +315,10 @@ function setPen(on) {
   pen = on;
   $('pen').classList.toggle('on', on);
   $('mirror').classList.toggle('pen', on);
-  $('gest').textContent = on ? 'ارسم بإصبعك على الصورة · «تراجع» يمسح آخر خط' :
+  $('gest').textContent = on ? 'ارسم بإصبعك على الصورة · «تراجع» يمسح آخر خط' : gestHint();
+}
+function gestHint() {
+  return cur && cur.kind === 'sheet' ? 'اضغط على صف عشان يتلوّن على الشاشة · اسحب للتمرير · يمين ويسار للأوراق' :
     'اسحب يمين ويسار للتقليب · فوق وتحت للتمرير · اضغط مطوّل للمؤشر';
 }
 $('pen').onclick = function () { setPen(!pen); };
@@ -420,7 +425,7 @@ $('file').addEventListener('change', function (e) {
   var list = Array.prototype.slice.call(e.target.files);
   e.target.value = '';
   list.forEach(function (f) {
-    if (/\.(docx?|pptx?|xlsx?|key|pages)$/i.test(f.name)) {
+    if (/\.(docx?|pptx?|key|pages|numbers)$/i.test(f.name)) {
       say('«' + f.name + '» ما ينعرض كذا. افتحه في تطبيقه وصدّره PDF (مشاركة ← تصدير أو طباعة ← PDF) وأرسله.', 7000);
       return;
     }

@@ -5,7 +5,7 @@
 
 var BASE = 'https://nadir-coderlab.github.io/sanad/';
 var W = 1920, H = 1080;
-var KINDS = { pdf: 'PDF', image: 'صورة', video: 'فيديو' };
+var KINDS = { pdf: 'PDF', image: 'صورة', video: 'فيديو', sheet: 'Excel' };
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'vendor/pdfjs/pdf.worker.min.js';
 
 function $(id) { return document.getElementById(id); }
@@ -218,6 +218,7 @@ function kindOf(name, type) {
   if (/pdf/.test(type) || /\.pdf$/i.test(name)) return 'pdf';
   if (/^image\//.test(type) || /\.(jpe?g|png|gif|webp|bmp)$/i.test(name)) return 'image';
   if (/^video\//.test(type) || /\.(mp4|mov|m4v|webm)$/i.test(name)) return 'video';
+  if (/spreadsheet|ms-excel|text\/csv/.test(type) || /\.(xlsx|xlsm|xls|xlsb|csv|ods)$/i.test(name)) return 'sheet';
   return null;
 }
 function byId(id) { for (var i = 0; i < files.length; i++) if (files[i].id === id) return files[i]; return null; }
@@ -230,6 +231,7 @@ function addFile(id, name, type, blob) {
             url: URL.createObjectURL(blob), pages: 1, thumb: '', last: 1 };
   var ready;
   if (kind === 'pdf') ready = loadPdf(f);
+  else if (kind === 'sheet') ready = loadSheet(f);
   else if (kind === 'image') ready = loadImage(f);
   else ready = loadVideo(f);
   ready.then(function () {
@@ -289,6 +291,110 @@ function loadPdf(f) {
     f.mode = f.ratio > 1.05 ? 'slides' : 'doc';
     return renderPage(f, 1, 320).then(function (cv) { f.thumb = cv.toDataURL('image/jpeg', .7); });
   });
+}
+
+// ── ملفات Excel و CSV: تنقرا بـ SheetJS وتنعرض جدول كبير مقروء من بعيد ──
+var SHEET_MAX_ROWS = 3000;
+
+function loadSheet(f) {
+  return f.blob.arrayBuffer().then(function (buf) {
+    f.book = XLSX.read(new Uint8Array(buf), { type: 'array' });
+    f.grids = [];
+    f.pages = f.book.SheetNames.length || 1;
+    f.ratio = 16 / 9;
+    var g = sheetGrid(f, 0);
+    if (!g.rows.length && f.pages === 1) throw new Error('empty');
+    f.thumb = sheetThumb(g);
+  });
+}
+
+// بعض الملفات المصدَّرة تعلن نطاق غلط (مثل A1:C1) يخفي كل الصفوف، فنحسبه من الخلايا نفسها
+function fixRange(ws) {
+  var keys = Object.keys(ws).filter(function (k) { return k[0] !== '!'; });
+  if (!keys.length) return ws;
+  var mr = 0, mc = 0;
+  keys.forEach(function (k) { var a = XLSX.utils.decode_cell(k); if (a.r > mr) mr = a.r; if (a.c > mc) mc = a.c; });
+  ws['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: mr, c: mc } });
+  return ws;
+}
+
+// يحوّل الورقة لصفوف نصوص (بنفس تنسيق الأرقام والتواريخ اللي في الإكسل)، ويشيل الأعمدة الفاضية في الآخر
+function sheetGrid(f, i) {
+  if (f.grids[i]) return f.grids[i];
+  var name = f.book.SheetNames[i], ws = f.book.Sheets[name];
+  // الصفوف الفاضية تبقى عشان رقم الصف على الشاشة يطابق رقمه في الإكسل، ونشيل الفاضي من البداية والنهاية بس
+  var rows = ws ? XLSX.utils.sheet_to_json(fixRange(ws), { header: 1, raw: false, defval: '', blankrows: true }) : [];
+  function blank(r) { return !r || !r.some(function (v) { return String(v).trim() !== ''; }); }
+  var start = 0;
+  while (start < rows.length && blank(rows[start])) start++;
+  var end = rows.length;
+  while (end > start && blank(rows[end - 1])) end--;
+  rows = rows.slice(start, end);
+  var total = rows.length, cols = 0;
+  rows = rows.slice(0, SHEET_MAX_ROWS);
+  rows.forEach(function (r) {
+    for (var c = r.length - 1; c >= 0; c--) if (String(r[c]).trim() !== '') { if (c + 1 > cols) cols = c + 1; break; }
+  });
+  rows = rows.map(function (r) { var o = []; for (var c = 0; c < cols; c++) o.push(r[c] == null ? '' : String(r[c])); return o; });
+  // الاتجاه حسب اللغة الغالبة في أول الصفوف
+  var sample = rows.slice(0, 60).map(function (r) { return r.join(' '); }).join(' ');
+  var arN = (sample.match(/[؀-ۿ]/g) || []).length, laN = (sample.match(/[A-Za-z]/g) || []).length;
+  return (f.grids[i] = { name: name, rows: rows, cols: cols, start: start, more: total - rows.length, rtl: arN >= laN });
+}
+
+function isNum(s) { return /^[\s\-+(]*[\d٠-٩][\d٠-٩,.\s%٪)]*$/.test(s); }
+
+function sheetThumb(g) {
+  var c = document.createElement('canvas'), cw = 320, ch = 180;
+  c.width = cw; c.height = ch;
+  var x = c.getContext('2d');
+  x.fillStyle = '#fff'; x.fillRect(0, 0, cw, ch);
+  var rh = 20, nc = Math.max(1, Math.min(g.cols, 5)), colW = cw / nc;
+  x.font = '11px sans-serif'; x.textBaseline = 'middle'; x.direction = g.rtl ? 'rtl' : 'ltr';
+  for (var r = 0; r < Math.min(g.rows.length, 9); r++) {
+    x.fillStyle = r === 0 ? '#0B3450' : r % 2 ? '#fff' : '#f1f4f8';
+    x.fillRect(0, r * rh, cw, rh);
+    for (var ci = 0; ci < nc; ci++) {
+      var px = g.rtl ? cw - (ci + 1) * colW : ci * colW;
+      x.strokeStyle = '#d9dee5'; x.strokeRect(px, r * rh, colW, rh);
+      x.fillStyle = r === 0 ? '#fff' : '#222';
+      x.save(); x.beginPath(); x.rect(px + 3, r * rh, colW - 6, rh); x.clip();
+      x.textAlign = g.rtl ? 'right' : 'left';
+      x.fillText(g.rows[r][ci] || '', g.rtl ? px + colW - 4 : px + 4, r * rh + rh / 2);
+      x.restore();
+    }
+  }
+  return c.toDataURL('image/jpeg', .8);
+}
+
+// يبني جدول الورقة الحالية داخل الصفحة
+function buildSheet(g) {
+  var t = document.createElement('table');
+  t.dir = g.rtl ? 'rtl' : 'ltr';
+  if (!g.rows.length) {
+    var d = document.createElement('div');
+    d.className = 'sheet-empty';
+    d.textContent = 'الورقة «' + g.name + '» فاضية';
+    return d;
+  }
+  var thead = document.createElement('thead'), tbody = document.createElement('tbody');
+  g.rows.forEach(function (r, ri) {
+    var tr = document.createElement('tr');
+    var rn = document.createElement(ri === 0 ? 'th' : 'td');
+    rn.className = 'rn';
+    rn.textContent = ri === 0 ? '' : ar(g.start + ri + 1);
+    tr.appendChild(rn);
+    r.forEach(function (v) {
+      var c = document.createElement(ri === 0 ? 'th' : 'td');
+      c.textContent = v;
+      if (ri && v && isNum(v)) c.className = 'n';
+      tr.appendChild(c);
+    });
+    (ri === 0 ? thead : tbody).appendChild(tr);
+  });
+  t.appendChild(thead);
+  t.appendChild(tbody);
+  return t;
 }
 
 function loadImage(f) {
@@ -405,6 +511,23 @@ function layout(keep) {
   pagesEl.innerHTML = '';
   pagesEl.className = '';
   pagesEl.style.cssText = '';
+
+  if (f.kind === 'sheet') {
+    var g = sheetGrid(f, cur.page - 1);
+    pagesEl.className = 'sheet';
+    pagesEl.style.fontSize = Math.round(30 * z) + 'px';
+    pagesEl.appendChild(buildSheet(g));
+    if (g.more > 0) {
+      var more = document.createElement('div');
+      more.className = 'sheet-more';
+      more.textContent = 'وفيه ' + ar(g.more) + ' صف بعد ما انعرضت (الحد ' + ar(SHEET_MAX_ROWS) + ')';
+      pagesEl.appendChild(more);
+    }
+    pagesEl.style.width = Math.max(W, pagesEl.firstChild.offsetWidth + 160) + 'px';
+    if (keep) center(fx, fy);
+    else { stage.scrollTop = 0; stage.scrollLeft = g.rtl ? stage.scrollWidth - W : 0; }
+    return;
+  }
 
   if (f.kind === 'pdf' && cur.mode === 'doc') {
     var pw = Math.round((W - 200) * z);
@@ -543,7 +666,8 @@ function gotoPage(n) {
 function step(d) {
   if (!cur) return;
   var f = cur.f;
-  if (f.kind === 'pdf') {
+  if (f.kind === 'pdf' || f.kind === 'sheet') {
+    // في الإكسل: التالي والسابق = الورقة اللي بعدها وقبلها
     var n = cur.page + d;
     if (n < 1 || n > f.pages) { showHud(); return; }
     gotoPage(n);
@@ -600,7 +724,7 @@ function cmd(c, a) {
       if (cur) { anim++; stage.scrollLeft += a.dx || 0; stage.scrollTop += a.dy || 0; }
       break;
     case 'zoom': setZoom(a.v); break;
-    case 'goto': if (cur && cur.f.kind === 'pdf') gotoPage(a.page); break;
+    case 'goto': if (cur && (cur.f.kind === 'pdf' || cur.f.kind === 'sheet')) gotoPage(a.page); break;
     case 'mode':
       if (cur && cur.f.kind === 'pdf') {
         cur.mode = cur.f.mode = cur.mode === 'doc' ? 'slides' : 'doc';
@@ -619,6 +743,16 @@ function cmd(c, a) {
     case 'delete': removeFile(a.id); break;
     case 'clear': files.slice().forEach(function (f) { removeFile(f.id, true); }); renderShelf(); broadcast(filesMsg()); break;
   }
+}
+
+// في الإكسل: الضغط على صف من الجوال يلوّنه على الشاشة، والضغط عليه مرة ثانية يشيل اللون
+function markRow(x, y) {
+  var el = document.elementFromPoint(x * W * scale, y * H * scale);
+  var tr = el && el.closest ? el.closest('tbody tr') : null;
+  var old = pagesEl.querySelector('tr.hl');
+  if (old) old.classList.remove('hl');
+  if (tr && tr !== old) tr.classList.add('hl');
+  scheduleThumb();
 }
 
 // ── الرسم على الملف ──
@@ -664,6 +798,7 @@ function clearInk() {
 
 var dotTimer;
 function point(x, y) {
+  if (cur && cur.f.kind === 'sheet') markRow(x, y);
   var d = $('dot');
   d.style.left = (x * W) + 'px';
   d.style.top = (y * H) + 'px';
@@ -677,7 +812,8 @@ function showHud() {
   if (!cur) return;
   var f = cur.f;
   $('hud-name').textContent = f.name;
-  $('hud-page').textContent = f.kind === 'pdf' ? ar(cur.page) + ' / ' + ar(f.pages) : '';
+  $('hud-page').textContent = f.kind === 'pdf' ? ar(cur.page) + ' / ' + ar(f.pages) :
+    f.kind === 'sheet' ? sheetGrid(f, cur.page - 1).name + (f.pages > 1 ? '  ' + ar(cur.page) + ' / ' + ar(f.pages) : '') : '';
   $('hud-zoom').textContent = cur.zoom !== 1 ? ar(Math.round(cur.zoom * 100)) + '٪' : '';
   $('hud').classList.add('on');
   clearTimeout(hudTimer);
@@ -723,6 +859,7 @@ function snapshot() {
   var g = c.getContext('2d');
   g.fillStyle = '#111214'; g.fillRect(0, 0, 480, 270);
   var sr = stage.getBoundingClientRect();
+  if (cur.f.kind === 'sheet') { snapSheet(g, k, sr); if (strokes.length) g.drawImage(inkEl, 0, 0, 480, 270); return c.toDataURL('image/jpeg', .72); }
   Array.prototype.forEach.call(pagesEl.children, function (el) {
     var r = el.getBoundingClientRect();
     var x = (r.left - sr.left) / scale * k, y = (r.top - sr.top) / scale * k;
@@ -736,6 +873,33 @@ function snapshot() {
   });
   if (strokes.length) g.drawImage(inkEl, 0, 0, 480, 270);
   return c.toDataURL('image/jpeg', .72);
+}
+
+// صورة الجوال المصغّرة للإكسل: نرسم الخلايا الظاهرة على الشاشة (الجدول ما ينرسم بـ drawImage)
+function snapSheet(g, k, sr) {
+  var cells = pagesEl.querySelectorAll('th, td');
+  var fs = parseFloat(pagesEl.style.fontSize) || 30;
+  g.textBaseline = 'middle';
+  g.font = Math.max(5, fs * k * .9) + 'px sans-serif';
+  for (var i = 0; i < cells.length; i++) {
+    var el = cells[i], r = el.getBoundingClientRect();
+    var x = (r.left - sr.left) / scale * k, y = (r.top - sr.top) / scale * k;
+    var w = r.width / scale * k, h = r.height / scale * k;
+    if (x > 480 || y > 270 || x + w < 0 || y + h < 0) continue;
+    var head = el.tagName === 'TH', hl = el.parentNode.classList.contains('hl');
+    g.fillStyle = head ? '#0B3450' : hl ? '#ffe58a' : el.className === 'rn' ? '#eef2f6' : '#fff';
+    g.fillRect(x, y, w, h);
+    g.strokeStyle = '#d9dee5'; g.lineWidth = .5; g.strokeRect(x, y, w, h);
+    var t = el.textContent;
+    if (!t) continue;
+    g.save(); g.beginPath(); g.rect(x + 1, y, w - 2, h); g.clip();
+    g.fillStyle = head ? '#fff' : '#1b2430';
+    var rtl = el.closest('table').dir === 'rtl';
+    g.direction = rtl ? 'rtl' : 'ltr';
+    g.textAlign = rtl ? 'right' : 'left';
+    g.fillText(t, rtl ? x + w - 3 : x + 3, y + h / 2);
+    g.restore();
+  }
 }
 
 // ── ريموت الشاشة ──

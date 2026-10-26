@@ -59,6 +59,20 @@ h1 { font-size: 108px; font-weight: 700; line-height: 1.05; }
 #pages.slides .pg { margin: 0 auto; box-shadow: none; }
 #pages img.media, #pages video.media { display: block; margin: 0 auto; }
 #ink { position: absolute; inset: 0; width: 1920px; height: 1080px; pointer-events: none; }
+/* ── Excel: جدول كبير مقروء من بعيد ── */
+#pages.sheet { padding: 36px 80px 90px; box-sizing: border-box; color: #1b2430; }
+#pages.sheet table { margin: 0 auto; border-collapse: separate; border-spacing: 0; background: #fff;
+  box-shadow: 0 10px 40px rgba(0,0,0,.5); line-height: 1.45; }
+#pages.sheet th, #pages.sheet td { padding: .32em .75em; border-bottom: 1px solid #d9dee5; border-inline-start: 1px solid #e6eaef;
+  max-width: 18em; white-space: pre-wrap; overflow-wrap: anywhere; vertical-align: top; text-align: start; unicode-bidi: plaintext; }
+#pages.sheet thead th { position: sticky; top: 0; z-index: 1; background: #0B3450; color: #fff; font-weight: 700; }
+#pages.sheet tbody tr:nth-child(even) td { background: #f3f6f9; }
+#pages.sheet td.n { white-space: nowrap; font-variant-numeric: tabular-nums; direction: ltr; text-align: center; }
+#pages.sheet .rn { background: #eef2f6 !important; color: #7b8794; font-size: .7em; text-align: center; white-space: nowrap; }
+#pages.sheet thead .rn { background: #0B3450 !important; }
+#pages.sheet tr.hl td { background: #ffe58a !important; box-shadow: inset 0 3px 0 #E0922F, inset 0 -3px 0 #E0922F; }
+.sheet-more, .sheet-empty { margin: 28px auto 0; text-align: center; color: #c7d3df; font-size: .8em; }
+.sheet-empty { margin-top: 30vh; font-size: 1.4em; }
 
 #hud { position: absolute; bottom: 36px; left: 50%; transform: translateX(-50%); padding: 14px 32px; border-radius: 40px;
   background: rgba(10,14,22,.82); font-size: 26px; display: flex; gap: 28px; opacity: 0; transition: opacity .5s; white-space: nowrap; }
