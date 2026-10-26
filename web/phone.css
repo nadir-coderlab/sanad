@@ -89,3 +89,4 @@ h1 { font-size: 22px; font-weight: 700; }
 
 #msg { position: fixed; left: 16px; right: 16px; bottom: calc(env(safe-area-inset-bottom) + 18px); padding: 14px 16px;
   border-radius: 14px; background: rgba(10,14,22,.95); border: 1px solid var(--line); font-size: 14px; line-height: 1.6; z-index: 5; }
+header h1 { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }

@@ -96,6 +96,9 @@ setInterval(function () {
 // وصاحبها يقدر يلغيه من الجوال: الرقم الفاضي = الدخول مفتوح لأي أحد يصوّر الباركود.
 var savedPin = localStorage.getItem('sanad-pin');
 var pin = savedPin === null ? '1234' : savedPin;
+// رمز الإدارة: هو آخر رقم سري حطّه صاحب الشاشة، ويبقى حتى لو انلغى الرقم السري.
+// تغيير الرقم أو إلغاؤه ما يصير إلا به، فاللي داخل بدون رقم ما يقدر يقفلها على صاحبها.
+var admin = localStorage.getItem('sanad-admin') || pin || '1234';
 var pinFails = 0, pinLockUntil = 0;
 
 function admit(conn) {
@@ -120,10 +123,20 @@ function checkPin(conn, m) {
 }
 
 function setPin(conn, m) {
+  var now = Date.now();
+  if (now < pinLockUntil) { send(conn, { t: 'pinset', ok: false, wait: Math.ceil((pinLockUntil - now) / 1000) }); return; }
+  if (String(m.admin) !== admin) {
+    if (++pinFails >= 5) { pinFails = 0; pinLockUntil = now + 60000; }
+    send(conn, { t: 'pinset', ok: false, bad: true });
+    return;
+  }
+  pinFails = 0;
   var p = m.off ? '' : String(m.pin || '');
   if (p && !/^\d{4,8}$/.test(p)) { send(conn, { t: 'pinset', ok: false }); return; }
   pin = p;
+  if (p) admin = p;
   localStorage.setItem('sanad-pin', pin);
+  localStorage.setItem('sanad-admin', admin);
   send(conn, { t: 'pinset', ok: true, open: !pin });
   broadcast({ t: 'pinmode', open: !pin });
   showSteps();
@@ -177,6 +190,13 @@ function onMsg(conn, m) {
     sendOut(conn, m.id);
   } else if (m.t === 'setpin') {
     setPin(conn, m);
+  } else if (m.t === 'admin') {
+    // الجوال يتأكد من رمز الإدارة قبل ما يبيّن أزرار الرقم السري
+    var now = Date.now();
+    if (now < pinLockUntil) { send(conn, { t: 'adminres', ok: false, wait: Math.ceil((pinLockUntil - now) / 1000) }); return; }
+    var good = String(m.admin) === admin;
+    if (good) pinFails = 0; else if (++pinFails >= 5) { pinFails = 0; pinLockUntil = now + 60000; }
+    send(conn, { t: 'adminres', ok: good, open: !pin });
   }
 }
 

@@ -130,17 +130,36 @@ $('pinform').addEventListener('submit', function (e) {
 
 function toLatin(s) { return String(s).replace(/[٠-٩]/g, function (d) { return '٠١٢٣٤٥٦٧٨٩'.indexOf(d); }); }
 
-// الشاشة تقول إذا الدخول مفتوح (بدون رقم سري) أو لا، والأزرار تتغيّر على حسبه
-var pinOpen = false;
+// أزرار الرقم السري مخفية عن الكل: تطلع لصاحب الشاشة بس، بضغط مطوّل على العنوان ثم رمز الإدارة
+var pinOpen = false, adminCode = '';
 function renderPinUi() {
+  var on = !!adminCode;
+  $('chpin').hidden = !on;
+  $('nopin').hidden = !on || pinOpen;
   $('chpin').textContent = pinOpen ? 'تفعيل رقم سري' : 'تغيير الرقم السري';
-  $('nopin').hidden = pinOpen;
-  $('openhint').hidden = !pinOpen;
+}
+
+(function () {
+  var h = document.querySelector('header h1'), t = null;
+  function start() { clearTimeout(t); t = setTimeout(askAdmin, 1200); }
+  function stop() { clearTimeout(t); }
+  h.addEventListener('pointerdown', start);
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach(function (e) { h.addEventListener(e, stop); });
+  h.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+})();
+
+function askAdmin() {
+  if ($('main').hidden) return;
+  if (adminCode) { adminCode = ''; renderPinUi(); return; }   // ضغط مطوّل ثاني يخفيها
+  var a = toLatin(prompt('رمز الإدارة') || '').trim();
+  if (!a) return;
+  adminCode = a;
+  send({ t: 'admin', admin: a });
 }
 
 $('nopin').onclick = function () {
   if (!confirm('تلغي الرقم السري؟ أي أحد يصوّر الباركود بيقدر يدخل ويرسل ويشوف الملفات.')) return;
-  send({ t: 'setpin', off: true });
+  send({ t: 'setpin', off: true, admin: adminCode });
 };
 
 $('chpin').onclick = function () {
@@ -150,7 +169,7 @@ $('chpin').onclick = function () {
   var b = toLatin(prompt('اكتب الرقم الجديد مرة ثانية للتأكيد') || '').trim();
   if (a !== b) { say('الرقمين مو متطابقين، ما تغيّر شي.'); return; }
   pinSent = a;
-  send({ t: 'setpin', pin: a });
+  send({ t: 'setpin', pin: a, admin: adminCode });
 };
 
 function onMsg(m) {
@@ -176,9 +195,16 @@ function onMsg(m) {
     return;
   }
   if (m.t === 'pinset') {
-    if (m.ok && m.open) { localStorage.removeItem(pinKey); say('انلغى الرقم السري. أي أحد يصوّر الباركود يقدر يدخل الحين.', 5000); }
-    else if (m.ok) { localStorage.setItem(pinKey, pinSent); say('تغيّر الرقم السري ✓ بلّغ فريقك بالرقم الجديد.', 5000); }
+    if (m.ok && m.open) { localStorage.removeItem(pinKey); say('انلغى الرقم السري ✓ ورقمك يبقى رمز الإدارة.', 5000); }
+    else if (m.ok) { localStorage.setItem(pinKey, pinSent); adminCode = pinSent; say('تغيّر الرقم السري ✓ بلّغ فريقك بالرقم الجديد.', 5000); }
+    else if (m.bad) { adminCode = ''; renderPinUi(); say('رمز الإدارة غلط.'); }
+    else if (m.wait) say('محاولات كثيرة غلط. انتظر ' + ar(m.wait) + ' ثانية.');
     else say('ما تغيّر الرقم. لازم يكون من ٤ إلى ٨ أرقام.');
+    return;
+  }
+  if (m.t === 'adminres') {
+    if (m.ok) { pinOpen = !!m.open; renderPinUi(); say('أزرار الرقم السري ظهرت تحت. ضغط مطوّل ثاني على العنوان يخفيها.', 4000); }
+    else { adminCode = ''; renderPinUi(); say(m.wait ? 'محاولات كثيرة غلط. انتظر ' + ar(m.wait) + ' ثانية.' : 'رمز الإدارة غلط.'); }
     return;
   }
   if (m.t === 'pinmode') { pinOpen = !!m.open; if (pinOpen) localStorage.removeItem(pinKey); renderPinUi(); return; }
