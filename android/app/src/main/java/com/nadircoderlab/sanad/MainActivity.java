@@ -37,6 +37,8 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        // خلفية كحلية من أول لحظة (بدل المربع الأبيض قبل ما تحمّل الصفحة)
+        getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(0xFF050D1A));
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
         web = new WebView(this);
@@ -132,6 +134,24 @@ public class MainActivity extends Activity {
 
     /** يناديه tv.js لما يضغط المستخدم «رجوع» وهو على شاشة البداية */
     public class Bridge {
+        /**
+         * عنوان الجهاز في الشبكة الداخلية. الصفحة تحطه بدل الاسم المموّه (xxx.local) في
+         * مرشّحات WebRTC: الآيفون يخفي عنوانه كذلك، وأندرويد ما يقدر يحل أسماء .local،
+         * فلو أخفينا عنواننا كمان ما يلقى أحد الثاني. يكفي طرف واحد يعلن عنوانه.
+         */
+        @JavascriptInterface
+        public String localIp() {
+            try {
+                for (java.net.NetworkInterface ni : java.util.Collections.list(java.net.NetworkInterface.getNetworkInterfaces())) {
+                    if (!ni.isUp() || ni.isLoopback() || ni.isVirtual()) continue;
+                    for (java.net.InetAddress a : java.util.Collections.list(ni.getInetAddresses())) {
+                        if (a instanceof java.net.Inet4Address && a.isSiteLocalAddress()) return a.getHostAddress();
+                    }
+                }
+            } catch (Exception ignored) {}
+            return "";
+        }
+
         @JavascriptInterface
         public void exit() {
             runOnUiThread(new Runnable() { @Override public void run() { finishAffinity(); } });

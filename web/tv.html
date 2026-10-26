@@ -44,6 +44,31 @@
 </div>
 
 <script src="vendor/qrcode.js"></script>
+<script>
+// في تطبيق أندرويد: نعلن عنوان الشاشة الحقيقي بدل الاسم المموّه (xxx.local) في مرشّحات WebRTC.
+// الآيفون يخفي عنوانه، وأندرويد ما يحل أسماء .local، فلازم طرف واحد على الأقل يعلن عنوانه.
+(function () {
+  var ip = '';
+  try { ip = window.SanadAndroid && SanadAndroid.localIp ? SanadAndroid.localIp() : ''; } catch (e) {}
+  if (!ip || !window.RTCPeerConnection) return;
+  var Orig = window.RTCPeerConnection, MDNS = /[0-9a-f]{8}-[0-9a-f-]{27}\.local/gi;
+  function fix(e) {
+    if (!e.candidate || !MDNS.test(e.candidate.candidate)) return e;
+    MDNS.lastIndex = 0;
+    var c = new RTCIceCandidate({ candidate: e.candidate.candidate.replace(MDNS, ip), sdpMid: e.candidate.sdpMid, sdpMLineIndex: e.candidate.sdpMLineIndex });
+    return { type: 'icecandidate', candidate: c, target: e.target };
+  }
+  function P(cfg, opt) {
+    var pc = new Orig(cfg, opt), add = pc.addEventListener.bind(pc), handler = null;
+    pc.addEventListener = function (t, f, o) { return add(t, t === 'icecandidate' ? function (e) { f(fix(e)); } : f, o); };
+    Object.defineProperty(pc, 'onicecandidate', { get: function () { return handler; }, set: function (f) { handler = f; } });
+    add('icecandidate', function (e) { if (handler) handler(fix(e)); });
+    return pc;
+  }
+  P.prototype = Orig.prototype;
+  window.RTCPeerConnection = P;
+})();
+</script>
 <script src="vendor/peerjs.min.js"></script>
 <script src="vendor/pdfjs/pdf.min.js"></script>
 <script src="vendor/xlsx.full.min.js"></script>

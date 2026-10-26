@@ -62,7 +62,7 @@ function startPeer() {
   restarting = false;
   online = false;
   setStatus('', 'جارٍ الاتصال…');
-  peer = new Peer('sanad-' + sid, { debug: 1 });
+  peer = new Peer('sanad-' + sid, { debug: 1, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] } });
   peer.on('open', function () { online = true; updateStatus(); });
   peer.on('connection', onConn);
   peer.on('disconnected', function () {

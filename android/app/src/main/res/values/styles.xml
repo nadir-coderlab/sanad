@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- نافذة كحلية من أول ما يفتح التطبيق، عشان ما يطلع مربع أبيض قبل الصفحة -->
+    <style name="Sanad" parent="@android:style/Theme.Material.NoActionBar.Fullscreen">
+        <item name="android:windowBackground">@color/bg</item>
+        <item name="android:colorBackground">@color/bg</item>
+        <item name="android:windowDisablePreview">false</item>
+    </style>
+    <color name="bg">#FF050D1A</color>
+</resources>

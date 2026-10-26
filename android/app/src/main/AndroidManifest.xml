@@ -12,7 +12,7 @@
         android:banner="@drawable/banner"
         android:icon="@drawable/icon"
         android:label="مكتب الخدمات الصحية المساندة"
-        android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen"
+        android:theme="@style/Sanad"
         android:usesCleartextTraffic="false">
 
         <activity

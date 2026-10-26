@@ -26,7 +26,7 @@ var peer = null, conn = null, retryTimer = null, openTimer = null;
 function start() {
   if (!sid) return;
   pill('', 'جارٍ الاتصال…');
-  peer = new Peer({ debug: 1 });
+  peer = new Peer({ debug: 1, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] } });
   peer.on('open', connect);
   peer.on('disconnected', function () { if (!peer.destroyed) setTimeout(function () { if (peer.disconnected) peer.reconnect(); }, 1500); });
   peer.on('error', function (e) {
