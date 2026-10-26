@@ -93,41 +93,55 @@ setInterval(function () {
 // ── الرقم السري ──
 // أي جوال يتصل لازم يرسل الرقم الصحيح قبل ما يشوف أي ملف أو يتحكم بشي.
 // الرقم محفوظ في الشاشة (الافتراضي 1234)، ويتغيّر من جوال داخل بالرقم الحالي.
-var pin = localStorage.getItem('sanad-pin') || '1234';
+// وصاحبها يقدر يلغيه من الجوال: الرقم الفاضي = الدخول مفتوح لأي أحد يصوّر الباركود.
+var savedPin = localStorage.getItem('sanad-pin');
+var pin = savedPin === null ? '1234' : savedPin;
 var pinFails = 0, pinLockUntil = 0;
+
+function admit(conn) {
+  conn.ok = true;
+  conns.push(conn);
+  updateStatus();
+  toast('اتصل ' + (conn.metadata && conn.metadata.dev || 'جهاز'), 2500);
+  send(conn, { t: 'pinok', open: !pin });
+  send(conn, filesMsg());
+  send(conn, stateMsg());
+  send(conn, { t: 'thumb', data: lastThumb });
+}
 
 function checkPin(conn, m) {
   var now = Date.now();
+  if (!pin) { admit(conn); return; }
   if (now < pinLockUntil) { send(conn, { t: 'pinbad', wait: Math.ceil((pinLockUntil - now) / 1000) }); return; }
-  if (String(m.pin) === pin) {
-    pinFails = 0;
-    conn.ok = true;
-    conns.push(conn);
-    updateStatus();
-    toast('اتصل ' + (conn.metadata && conn.metadata.dev || 'جهاز'), 2500);
-    send(conn, { t: 'pinok' });
-    send(conn, filesMsg());
-    send(conn, stateMsg());
-    send(conn, { t: 'thumb', data: lastThumb });
-    return;
-  }
+  if (String(m.pin) === pin) { pinFails = 0; admit(conn); return; }
   // بعد ٥ محاولات غلط يقفل دقيقة
   if (++pinFails >= 5) { pinFails = 0; pinLockUntil = now + 60000; }
   send(conn, { t: 'pinbad', wait: pinLockUntil > now ? 60 : 0 });
 }
 
 function setPin(conn, m) {
-  var p = String(m.pin || '');
-  if (!/^\d{4,8}$/.test(p)) { send(conn, { t: 'pinset', ok: false }); return; }
+  var p = m.off ? '' : String(m.pin || '');
+  if (p && !/^\d{4,8}$/.test(p)) { send(conn, { t: 'pinset', ok: false }); return; }
   pin = p;
   localStorage.setItem('sanad-pin', pin);
-  send(conn, { t: 'pinset', ok: true });
+  send(conn, { t: 'pinset', ok: true, open: !pin });
+  broadcast({ t: 'pinmode', open: !pin });
+  showSteps();
 }
+
+// خطوة «اكتب الرقم السري» تختفي من شاشة البداية إذا الدخول مفتوح
+function showSteps() {
+  var li = document.querySelectorAll('#steps li');
+  if (li.length < 3) return;
+  li[1].hidden = !pin;
+  li[2].querySelector('b').textContent = pin ? '٣' : '٢';
+}
+showSteps();
 
 function onConn(conn) {
   conn.rx = null;
   conn.ok = false;
-  conn.on('open', function () { send(conn, { t: 'auth' }); });
+  conn.on('open', function () { if (pin) send(conn, { t: 'auth' }); else admit(conn); });
   conn.on('data', function (d) {
     if (typeof d === 'string') {
       var m;
@@ -227,7 +241,7 @@ function addFile(id, name, type, blob) {
   var kind = kindOf(name, type);
   if (!kind) { hideToast(); broadcast({ t: 'say', text: 'هالنوع ما ينعرض: ' + name }); return; }
   if (byId(id)) removeFile(id);
-  var f = { id: id, name: name.replace(/\.[^.]+$/, ''), file: name, type: type || blob.type, kind: kind, size: blob.size, blob: blob,
+  var f = { id: id, name: name.replace(/\.[^.]+$/, ''), file: name, type: type || blob.type, kind: kind, size: blob.size, blob: blob, added: Date.now(),
             url: URL.createObjectURL(blob), pages: 1, thumb: '', last: 1 };
   var ready;
   if (kind === 'pdf') ready = loadPdf(f);
@@ -247,6 +261,18 @@ function addFile(id, name, type, blob) {
     broadcast({ t: 'say', text: e && e.name === 'PasswordException' ? 'الملف محمي بكلمة سر: ' + f.name : 'ما قدرت أفتح الملف: ' + f.name });
   });
 }
+
+// كل ملف ينحذف لحاله بعد ٢٤ ساعة من وصوله، حتى لو الشاشة ما انطفت
+var FILE_TTL = 24 * 3600 * 1000;
+function fileLeft(f) { return Math.max(0, f.added + FILE_TTL - Date.now()); }
+function expireFiles() {
+  var old = files.filter(function (f) { return !fileLeft(f); });
+  if (!old.length) return;
+  old.forEach(function (f) { removeFile(f.id, true); });
+  renderShelf();
+  broadcast(filesMsg());
+}
+setInterval(expireFiles, 60000);
 
 // لو امتلت الذاكرة نمسح الأقدم
 function trim() {
@@ -823,7 +849,7 @@ function showHud() {
 // ── اللي يوصل للجوالات: قائمة الملفات، والحالة، وصورة مصغّرة من الشاشة ──
 function filesMsg() {
   return { t: 'files', files: files.map(function (f) {
-    return { id: f.id, name: f.name, kind: f.kind, pages: f.pages, size: f.size, thumb: f.thumb };
+    return { id: f.id, name: f.name, kind: f.kind, pages: f.pages, size: f.size, thumb: f.thumb, left: fileLeft(f) };
   }) };
 }
 function stateMsg() {

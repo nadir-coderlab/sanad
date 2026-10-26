@@ -130,6 +130,19 @@ $('pinform').addEventListener('submit', function (e) {
 
 function toLatin(s) { return String(s).replace(/[٠-٩]/g, function (d) { return '٠١٢٣٤٥٦٧٨٩'.indexOf(d); }); }
 
+// الشاشة تقول إذا الدخول مفتوح (بدون رقم سري) أو لا، والأزرار تتغيّر على حسبه
+var pinOpen = false;
+function renderPinUi() {
+  $('chpin').textContent = pinOpen ? 'تفعيل رقم سري' : 'تغيير الرقم السري';
+  $('nopin').hidden = pinOpen;
+  $('openhint').hidden = !pinOpen;
+}
+
+$('nopin').onclick = function () {
+  if (!confirm('تلغي الرقم السري؟ أي أحد يصوّر الباركود بيقدر يدخل ويرسل ويشوف الملفات.')) return;
+  send({ t: 'setpin', off: true });
+};
+
 $('chpin').onclick = function () {
   var a = toLatin(prompt('الرقم السري الجديد (من ٤ إلى ٨ أرقام)') || '').trim();
   if (!a) return;
@@ -147,7 +160,9 @@ function onMsg(m) {
     return;
   }
   if (m.t === 'pinok') {
-    localStorage.setItem(pinKey, pinSent);
+    pinOpen = !!m.open;
+    if (pinOpen) localStorage.removeItem(pinKey); else if (pinSent) localStorage.setItem(pinKey, pinSent);
+    renderPinUi();
     $('pinbox').hidden = true;
     $('main').hidden = false;
     pill('ok', 'متصل');
@@ -161,12 +176,18 @@ function onMsg(m) {
     return;
   }
   if (m.t === 'pinset') {
-    if (m.ok) { localStorage.setItem(pinKey, pinSent); say('تغيّر الرقم السري ✓ بلّغ فريقك بالرقم الجديد.', 5000); }
+    if (m.ok && m.open) { localStorage.removeItem(pinKey); say('انلغى الرقم السري. أي أحد يصوّر الباركود يقدر يدخل الحين.', 5000); }
+    else if (m.ok) { localStorage.setItem(pinKey, pinSent); say('تغيّر الرقم السري ✓ بلّغ فريقك بالرقم الجديد.', 5000); }
     else say('ما تغيّر الرقم. لازم يكون من ٤ إلى ٨ أرقام.');
     return;
   }
+  if (m.t === 'pinmode') { pinOpen = !!m.open; if (pinOpen) localStorage.removeItem(pinKey); renderPinUi(); return; }
   if (m.t === 'say') { say(m.text, 6000); return; }
-  if (m.t === 'files') { files = m.files; renderList(); }
+  if (m.t === 'files') {
+    var now = Date.now();
+    files = m.files.map(function (f) { f.expAt = now + (f.left || 0); return f; });
+    renderList();
+  }
   else if (m.t === 'state') { cur = m.cur; renderCtl(); renderList(); }
   else if (m.t === 'thumb') {
     if (m.data) $('thumb').src = m.data;
@@ -261,7 +282,8 @@ function renderList() {
     d.className = 'it' + (cur && cur.id === f.id ? ' on' : '');
     d.innerHTML = (f.thumb ? '<img src="' + f.thumb + '">' : '<div class="ph"></div>') +
       '<div class="x"><b>' + esc(f.name) + '</b><span>' + KINDS[f.kind] +
-      (f.kind === 'pdf' ? ' · ' + ar(f.pages) + ' صفحة' : f.kind === 'sheet' && f.pages > 1 ? ' · ' + ar(f.pages) + ' أوراق' : '') + '</span></div>' +
+      (f.kind === 'pdf' ? ' · ' + ar(f.pages) + ' صفحة' : f.kind === 'sheet' && f.pages > 1 ? ' · ' + ar(f.pages) + ' أوراق' : '') +
+      ' · ' + leftText(f) + '</span></div>' +
       '<button class="dl" data-id="' + esc(f.id) + '">' + dlLabel(f.id) + '</button><button class="del">حذف</button>';
     d.onclick = function (e) {
       if (e.target.classList.contains('del')) cmd('delete', { id: f.id });
@@ -271,6 +293,14 @@ function renderList() {
     box.appendChild(d);
   });
 }
+
+// كل ملف ينحذف من الشاشة لحاله بعد ٢٤ ساعة من وصوله
+function leftText(f) {
+  var m = Math.max(0, Math.round((f.expAt - Date.now()) / 60000));
+  if (m >= 60) return 'ينحذف بعد ' + ar(Math.ceil(m / 60)) + ' س';
+  return m ? 'ينحذف بعد ' + ar(m) + ' د' : 'ينحذف الحين';
+}
+setInterval(function () { if (files.length && !$('main').hidden) renderList(); }, 60000);
 
 function renderCtl() {
   $('ctl').hidden = !cur;
