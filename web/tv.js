@@ -632,6 +632,14 @@ function goHome() {
   changed(true);
 }
 
+function videoFail(f) {
+  if (f.failed) return;
+  f.failed = true;
+  toast('هذه الشاشة لا تستطيع تشغيل صيغة هذا الفيديو', 6000);
+  broadcast({ t: 'say', text: 'الشاشة ما قدرت تشغّل «' + f.name + '». غالبًا صُوّر بصيغة HDR في الآيفون. ' +
+    'غيّر من إعدادات الكاميرا ← التنسيقات ← «الأكثر توافقًا»، أو أرسله بعد تحويله من «الصور» (مشاركة ← حفظ في الملفات).' });
+}
+
 function stopVideo() {
   var v = pagesEl.querySelector('video');
   if (v) { v.pause(); v.removeAttribute('src'); v.load(); }
@@ -711,6 +719,12 @@ function layout(keep) {
     el.autoplay = true;
     el.onplay = el.onpause = el.onended = function () { changed(); };
     el.ontimeupdate = throttle(function () { changed(); }, 1000);
+    // لو الشاشة ما قدرت تشغّل الفيديو (غالبًا HDR/Dolby Vision من الآيفون) نقول للجوال بدل شاشة سودا
+    var vf = f, vid = el;
+    vid.onerror = function () { videoFail(vf); };
+    setTimeout(function () {
+      if (cur && cur.f === vf && vid.isConnected && (vid.readyState < 2 || (!vid.videoWidth && !vid.error))) videoFail(vf);
+    }, 8000);
   }
   el.style.width = Math.round(w) + 'px';
   el.style.height = Math.round(h) + 'px';
