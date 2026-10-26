@@ -19,6 +19,8 @@
     `SANAD_KEYSTORE_B64`) وينشره على الرابط الثابت `releases/download/android-app/Sanad.apk`. التثبيت: `android/INSTALL.md`.
   - **سامسونج Tizen** (`tizen/`، `SndSrv0001.Sanad`): iframe للصفحة الحية. البناء والتثبيت: `tizen/build.sh` و`tizen/install.sh`
     (أو `tizen/INSTALL-PC.md` من ويندوز).
+  - **إل جي webOS** (`webos/`، `com.nadircoderlab.sanad`): iframe للصفحة الحية، ونسخة احتياطية من `web/` داخله. البناء والتثبيت من ويندوز:
+    `webos/build.ps1 -Install` (التفاصيل في `webos/README.md`). جلسة وضع المطوّر في إل جي محدودة المدة وتُمدَّد من الشاشة.
 - لا تغيّر رابط الصفحة الحية في الأغلفة.
 
 ## الاتصال
