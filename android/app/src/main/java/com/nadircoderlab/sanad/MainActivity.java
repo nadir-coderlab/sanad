@@ -47,6 +47,7 @@ public class MainActivity extends Activity {
         s.setDomStorageEnabled(true);          // رقم الشاشة محفوظ في localStorage
         s.setMediaPlaybackRequiresUserGesture(false);
         s.setAllowFileAccess(true);            // النسخة الاحتياطية من assets
+        s.setCacheMode(WebSettings.LOAD_NO_CACHE); // كل مرة ينفتح ياخذ آخر نسخة من الصفحة
         web.setBackgroundColor(0xFF050D1A);
         web.setWebChromeClient(new WebChromeClient());
         web.setWebViewClient(new WebViewClient() {

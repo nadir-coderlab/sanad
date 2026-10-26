@@ -406,9 +406,10 @@ function sheetGrid(f, i) {
   var cols = ws['!cols'] || [], rowsI = ws['!rows'] || [], widths = [], heights = [];
   for (var c = 0; c < nc; c++) {
     var ci = cols[c] || {};
-    widths.push(ci.hidden ? 0 : Math.round(ci.wpx || (ci.wch ? ci.wch * 7 + 5 : ci.width ? ci.width * 7 : 64)));
+    // بمعادلة الإكسل (عرض الحرف ٧ بكسل لخط Calibri 11)؛ wpx من المكتبة يتغيّر من ملف لملف فما نعتمد عليه
+    widths.push(ci.hidden ? 0 : Math.round(ci.width ? ci.width * 7 : ci.wch ? ci.wch * 7 + 5 : ci.wpx || 64));
   }
-  for (var r = 0; r < nr; r++) { var ri = rowsI[r] || {}; heights.push(ri.hidden ? 0 : Math.round(ri.hpx || (ri.hpt ? ri.hpt * 4 / 3 : 20))); }
+  for (var r = 0; r < nr; r++) { var ri = rowsI[r] || {}; heights.push(ri.hidden ? 0 : Math.round(ri.hpt ? ri.hpt * 4 / 3 : ri.hpx || 20)); }
   // الاتجاه: من إعداد الملف لو موجود، وإلا من اللغة الغالبة
   var views = (f.book.Workbook && f.book.Workbook.Views) || [], rtl;
   if (ws['!views'] && ws['!views'][0] && ws['!views'][0].RTL != null) rtl = !!ws['!views'][0].RTL;
