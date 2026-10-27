@@ -29,7 +29,10 @@ if (!sid) {
 }
 localStorage.setItem('sanad-id', sid);
 var phoneBase = /^https?:$/.test(location.protocol) ? location.href.replace(/tv\.html.*$/, '') : BASE;
-var phoneUrl = phoneBase + '#' + sid;
+// الرقم في ?s= لا بعد # : الآيفون يرجع لتبويبه القديم إذا اختلف الرابط بعد # بس، فيتصل بالشاشة السابقة
+var phoneUrl = phoneBase + '?s=' + sid;
+// رمز قصير يطلع على الشاشة وفي الجوال، عشان يعرف المستخدم أي شاشة متصل فيها
+$('code').textContent = 'رمز الشاشة  ' + sid.slice(0, 4).toUpperCase();
 (function () {
   var q = qrcode(0, 'M');
   q.addData(phoneUrl);

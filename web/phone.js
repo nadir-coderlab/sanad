@@ -8,14 +8,20 @@ function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 var KINDS = { pdf: 'PDF', image: 'صورة', video: 'فيديو', sheet: 'Excel' };
 
 // رقم الشاشة يجي من الباركود، ونحفظه عشان المرة الجاية تفتح على طول
-var sid = location.hash.slice(1);
+// الباركود الجديد فيه ?s=رقم، والقديم #رقم
+var sid = new URLSearchParams(location.search).get('s') || location.hash.slice(1);
 if (sid) localStorage.setItem('sanad-id', sid);
 else sid = localStorage.getItem('sanad-id');
+var code = sid ? sid.slice(0, 4).toUpperCase() : '';
 if (!sid) { $('nolink').hidden = false; pill('bad', 'لا توجد شاشة'); }
 // الصفحة الرئيسية ما تطلع إلا بعد ما الشاشة تقبل الرقم السري
 addEventListener('hashchange', function () { location.reload(); });
 
-function pill(cls, text) { var p = $('pill'); p.className = cls; p.lastChild.textContent = text; }
+function pill(cls, text) {
+  var p = $('pill');
+  p.className = cls;
+  p.lastChild.textContent = cls === 'ok' && code ? text + ' · ' + code : text;
+}
 
 var dev = /iPhone/.test(navigator.userAgent) ? 'آيفون' : /iPad/.test(navigator.userAgent) ? 'آيباد' :
   /Android/.test(navigator.userAgent) ? 'هاتف أندرويد' : /Mac/.test(navigator.userAgent) ? 'ماك' : 'جهاز';

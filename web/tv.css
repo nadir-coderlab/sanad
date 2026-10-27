@@ -35,6 +35,7 @@ h1 { font-size: 72px; font-weight: 700; line-height: 1.05; white-space: nowrap; 
 #status i { width: 14px; height: 14px; border-radius: 7px; background: var(--gold); }
 #status.ok i { background: #6ee7a8; }
 #status.bad i { background: #ff7b7b; }
+#code { margin-top: 10px; font-size: 22px; color: var(--faint); white-space: pre; }
 
 #shelf { position: absolute; left: 120px; right: 120px; bottom: 70px; }
 .shelf-h { display: flex; align-items: baseline; gap: 24px; font-size: 30px; font-weight: 700; margin-bottom: 20px; }
