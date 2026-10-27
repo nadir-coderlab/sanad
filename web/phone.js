@@ -21,35 +21,59 @@ var dev = /iPhone/.test(navigator.userAgent) ? 'آيفون' : /iPad/.test(naviga
   /Android/.test(navigator.userAgent) ? 'هاتف أندرويد' : /Mac/.test(navigator.userAgent) ? 'ماك' : 'جهاز';
 
 // ── الاتصال بالشاشة ──
-var peer = null, conn = null, retryTimer = null, openTimer = null;
+var peer = null, conn = null, retryTimer = null, openTimer = null, fails = 0, hiddenAt = 0;
 
 function start() {
   if (!sid) return;
   pill('', 'جارٍ الاتصال…');
-  peer = new Peer({ debug: 1, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] } });
-  peer.on('open', connect);
-  peer.on('disconnected', function () { if (!peer.destroyed) setTimeout(function () { if (peer.disconnected) peer.reconnect(); }, 1500); });
-  peer.on('error', function (e) {
+  var p = peer = new Peer({ debug: 1, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] } });
+  p.on('open', function () { if (p === peer) connect(); });
+  p.on('disconnected', function () { setTimeout(function () { if (p === peer && !p.destroyed && p.disconnected) p.reconnect(); }, 1500); });
+  p.on('error', function (e) {
+    if (p !== peer) return;
     if (e.type === 'peer-unavailable') { pill('bad', 'الشاشة غير متصلة'); retry(3000); return; }
     if (['network', 'server-error', 'socket-error', 'socket-closed'].indexOf(e.type) >= 0) {
       pill('bad', 'لا يوجد اتصال بالإنترنت');
-      try { peer.destroy(); } catch (x) {}
-      setTimeout(start, 3000);
+      try { p.destroy(); } catch (x) {}
+      setTimeout(function () { if (p === peer) start(); }, 3000);
     }
   });
+}
+
+// اتصال جديد من الصفر. الآيفون إذا رجع لصفحة قديمة يبقى اتصالها بسيرفر الإشارة ميّت وهي تحسبه شغّال،
+// فتعلق على «جارٍ الاتصال بالشاشة…» للأبد. الجوال الجديد ما عنده صفحة قديمة فيشتغل.
+function restart() {
+  clearTimeout(retryTimer);
+  clearTimeout(openTimer);
+  var p = peer, c = conn;
+  peer = null;
+  conn = null;
+  try { if (c) c.close(); } catch (e) {}
+  try { if (p) p.destroy(); } catch (e) {}
+  if (c && c.ok) { failActive(); failDl(); }
+  start();
 }
 
 function connect() {
   clearTimeout(retryTimer);
   if (conn && conn.open) return;
   if (peer.disconnected) { peer.reconnect(); return; }
-  pill('', 'جارٍ الاتصال بالشاشة…');
+  // الشاشة ردّت ومع ذلك ما اكتمل الاتصال مرتين = الجوال والشاشة على شبكتين ما يوصلون لبعض
+  if (fails >= 2) pill('bad', 'تعذّر الوصول إلى الشاشة. تأكّد أن جوالك على شبكة الواي فاي نفسها');
+  else pill('', 'جارٍ الاتصال بالشاشة…');
   var c = peer.connect('sanad-' + sid, { serialization: 'raw', reliable: true, metadata: { dev: dev } });
   conn = c;
   clearTimeout(openTimer);
-  openTimer = setTimeout(function () { if (!c.open) { c.close(); retry(500); } }, 15000);
+  openTimer = setTimeout(function () {
+    if (c.open || conn !== c) return;
+    var pc = c.peerConnection;
+    if (pc && pc.remoteDescription) fails++;
+    restart();
+  }, 10000);
   c.on('open', function () {
     clearTimeout(openTimer);
+    c.ok = true;
+    fails = 0;
     pill('', 'جارٍ التحقق…');
   });
   c.on('data', function (d) {
@@ -88,12 +112,19 @@ function linkType(c) {
 function send(m) { if (conn && conn.open) conn.send(JSON.stringify(m)); }
 function cmd(c, extra) { var m = { t: 'cmd', c: c }; for (var k in extra) m[k] = extra[k]; send(m); }
 
+// رجوع للصفحة: إذا غابت أكثر من ٢٠ ثانية وما فيه اتصال حيّ، نبدأ من الصفر بدل ما نثق بالاتصال القديم
 document.addEventListener('visibilitychange', function () {
-  if (document.hidden || !peer) return;
-  if (peer.destroyed) start();
-  else if (!conn || !conn.open) connect();
+  if (document.hidden) { hiddenAt = Date.now(); return; }
+  if (!sid) return;
+  var away = hiddenAt && Date.now() - hiddenAt > 20000;
+  hiddenAt = 0;
+  var pc = conn && conn.peerConnection, dead = pc && /failed|disconnected|closed/.test(pc.iceConnectionState);
+  if (!peer || peer.destroyed || dead) restart();
+  else if (!conn || !conn.open) { if (away) restart(); else connect(); }
   wake();
 });
+// سفاري يرجّع الصفحة من ذاكرته بدون تحميل (زر الرجوع أو تبويب قديم)
+addEventListener('pageshow', function (e) { if (e.persisted && sid) restart(); });
 
 // يخلي شاشة الجوال صاحية وقت الاجتماع
 var lock = null;
