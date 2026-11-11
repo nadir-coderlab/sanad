@@ -5,7 +5,7 @@
 
 var BASE = 'https://nadir-coderlab.github.io/sanad/';
 var W = 1920, H = 1080;
-var KINDS = { pdf: 'PDF', image: 'صورة', video: 'فيديو', sheet: 'Excel' };
+var KINDS = { pdf: 'PDF', image: 'صورة', video: 'فيديو', sheet: 'Excel', deck: 'عرض تقديمي' };
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'vendor/pdfjs/pdf.worker.min.js';
 
 function $(id) { return document.getElementById(id); }
@@ -256,6 +256,7 @@ function kindOf(name, type) {
   if (/^image\//.test(type) || /\.(jpe?g|png|gif|webp|bmp)$/i.test(name)) return 'image';
   if (/^video\//.test(type) || /\.(mp4|mov|m4v|webm)$/i.test(name)) return 'video';
   if (/spreadsheet|ms-excel|text\/csv/.test(type) || /\.(xlsx|xlsm|xls|xlsb|csv|ods)$/i.test(name)) return 'sheet';
+  if (/text\/html/.test(type) || /\.html?$/i.test(name)) return 'deck';
   return null;
 }
 function byId(id) { for (var i = 0; i < files.length; i++) if (files[i].id === id) return files[i]; return null; }
@@ -270,6 +271,7 @@ function addFile(id, name, type, blob) {
   if (kind === 'pdf') ready = loadPdf(f);
   else if (kind === 'sheet') ready = loadSheet(f);
   else if (kind === 'image') ready = loadImage(f);
+  else if (kind === 'deck') ready = loadDeck(f);
   else ready = loadVideo(f);
   ready.then(function () {
     files.push(f);
@@ -314,6 +316,7 @@ function removeFile(id, quiet) {
   if (cur && cur.f === f) goHome();
   files.splice(files.indexOf(f), 1);
   URL.revokeObjectURL(f.url);
+  if (f.deckUrl) URL.revokeObjectURL(f.deckUrl);
   if (f.doc) f.doc.destroy();
   focusIdx = Math.min(focusIdx, Math.max(0, files.length - 1));
   if (!quiet) { renderShelf(); broadcast(filesMsg()); }
@@ -539,6 +542,52 @@ function moveSel(dr, dc) {
   showSel(g, true);
 }
 
+// ── العرض التقديمي (ملف HTML واحد، مثل العرض السينمائي): يعمل داخل إطار معزول، والجوال يقلّب نقراته ──
+// الإطار بلا allow-same-origin فلا يصل لاتصال الشاشة ولا لذاكرتها. والعرض يرسل لنا قائمة نقراته (meta) والنقرة الحالية (state).
+function loadDeck(f) {
+  return f.blob.slice(0, 4096).text().then(function (head) {
+    if (!/<html|<!doctype html/i.test(head)) throw new Error('not html');
+    f.deckUrl = URL.createObjectURL(new Blob([f.blob], { type: 'text/html' }));
+    f.ratio = 16 / 9;
+    f.beats = null; f.scenes = null;
+    f.thumb = deckThumb(f, null);
+  });
+}
+function deckFrame() { return cur && cur.f.kind === 'deck' ? pagesEl.querySelector('iframe') : null; }
+function deckPost(m) { var fr = deckFrame(); if (fr && fr.contentWindow) fr.contentWindow.postMessage(m, '*'); }
+function deckLabel(f, page) {
+  var b = f.beats && f.beats[page - 1], s = b && f.scenes ? f.scenes[b.scene] : null;
+  return s ? s.title : '';
+}
+// صورة مصغّرة للعرض: الإطار المعزول لا يُرسم، فنرسم اسم الصفحة ورقم النقرة
+function deckThumb(f, page) {
+  var c = document.createElement('canvas'); c.width = 480; c.height = 270;
+  var g = c.getContext('2d'), gr = g.createLinearGradient(0, 0, 480, 270);
+  gr.addColorStop(0, '#0B3450'); gr.addColorStop(1, '#030B14');
+  g.fillStyle = gr; g.fillRect(0, 0, 480, 270);
+  g.direction = 'rtl'; g.textAlign = 'center'; g.fillStyle = '#EEF6FA';
+  g.font = 'bold 30px T, sans-serif';
+  g.fillText(page ? deckLabel(f, page) || f.name : f.name, 240, 125, 440);
+  g.fillStyle = '#7FE0E3'; g.font = '22px T, sans-serif';
+  g.fillText(page && f.pages > 1 ? 'نقرة ' + ar(page) + ' من ' + ar(f.pages) : 'عرض تقديمي', 240, 170);
+  return c.toDataURL('image/jpeg', .8);
+}
+addEventListener('message', function (e) {
+  var fr = deckFrame(), m = e.data || {};
+  if (!fr || e.source !== fr.contentWindow) return;
+  var f = cur.f;
+  if (m.type === 'meta' && m.beats && m.beats.length) {
+    f.beats = m.beats; f.scenes = m.scenes; f.pages = m.beats.length;
+    if (cur.page > 1 && m.cur !== cur.page - 1) deckPost({ type: 'cmd', cmd: 'goto', i: Math.min(cur.page, f.pages) - 1 });
+    else cur.page = m.cur + 1;
+    broadcast(filesMsg());
+    changed();
+  } else if (m.type === 'state' && typeof m.cur === 'number') {
+    cur.page = m.cur + 1;
+    changed();
+  }
+});
+
 function loadImage(f) {
   return new Promise(function (ok, bad) {
     var img = new Image();
@@ -601,7 +650,7 @@ function renderShelf() {
     d.className = 'file' + (start + i === focusIdx ? ' focus' : '');
     d.innerHTML = (f.thumb ? '<img src="' + f.thumb + '">' : '') +
       '<div class="meta"><div class="n"></div><div class="k">' + KINDS[f.kind] +
-      (f.kind === 'pdf' ? ' · ' + ar(f.pages) + ' صفحة' : '') + '</div></div>';
+      (f.kind === 'pdf' ? ' · ' + ar(f.pages) + ' صفحة' : f.kind === 'deck' && f.pages > 1 ? ' · ' + ar(f.pages) + ' نقرة' : '') + '</div></div>';
     d.querySelector('.n').textContent = f.name;
     box.appendChild(d);
   });
@@ -696,6 +745,18 @@ function layout(keep) {
     if (keep) center(fx, fy);
     else { stage.scrollLeft = (stage.scrollWidth - W) / 2; stage.scrollTop = pageTop(cur.page); }
     paintVisible();
+    return;
+  }
+
+  if (f.kind === 'deck') {
+    var fr = document.createElement('iframe');
+    fr.setAttribute('sandbox', 'allow-scripts');
+    fr.name = 'lite';          // العرض يخفّف الجزيئات على أجهزة التلفزيون
+    fr.tabIndex = -1;
+    fr.className = 'deck';
+    fr.src = f.deckUrl;
+    pagesEl.className = 'slides';
+    pagesEl.appendChild(fr);
     return;
   }
 
@@ -815,6 +876,7 @@ stage.addEventListener('scroll', throttle(function () {
 
 function gotoPage(n) {
   var f = cur.f;
+  if (f.kind === 'deck') { deckPost({ type: 'cmd', cmd: 'goto', i: Math.max(1, Math.min(f.pages, n)) - 1 }); return; }
   n = Math.max(1, Math.min(f.pages, n));
   if (cur.mode === 'doc') { cur.page = n; smoothTo(stage.scrollLeft, pageTop(n)); }
   else if (n !== cur.page) { cur.page = n; layout(false); }
@@ -824,6 +886,7 @@ function gotoPage(n) {
 function step(d) {
   if (!cur) return;
   var f = cur.f;
+  if (f.kind === 'deck') { deckPost({ type: 'cmd', cmd: d > 0 ? 'next' : 'back' }); return; }
   if (f.kind === 'pdf' || f.kind === 'sheet') {
     // في الإكسل: التالي والسابق = الورقة اللي بعدها وقبلها
     var n = cur.page + d;
@@ -844,7 +907,7 @@ function nudge(d) {
 }
 
 function setZoom(v) {
-  if (!cur || cur.f.kind === 'video') return;
+  if (!cur || cur.f.kind === 'video' || cur.f.kind === 'deck') return;
   var z = v ? cur.zoom * v : 1;
   z = Math.max(0.5, Math.min(4, z));
   if (Math.abs(z - 1) < 0.06) z = 1;
@@ -882,7 +945,7 @@ function cmd(c, a) {
       if (cur) { anim++; stage.scrollLeft += a.dx || 0; stage.scrollTop += a.dy || 0; }
       break;
     case 'zoom': setZoom(a.v); break;
-    case 'goto': if (cur && (cur.f.kind === 'pdf' || cur.f.kind === 'sheet')) gotoPage(a.page); break;
+    case 'goto': if (cur && (cur.f.kind === 'pdf' || cur.f.kind === 'sheet' || cur.f.kind === 'deck')) gotoPage(a.page); break;
     case 'mode':
       if (cur && cur.f.kind === 'pdf') {
         cur.mode = cur.f.mode = cur.mode === 'doc' ? 'slides' : 'doc';
@@ -1006,7 +1069,7 @@ function showHud() {
   if (!cur) return;
   var f = cur.f;
   $('hud-name').textContent = f.name;
-  $('hud-page').textContent = f.kind === 'pdf' ? ar(cur.page) + ' / ' + ar(f.pages) :
+  $('hud-page').textContent = f.kind === 'pdf' || (f.kind === 'deck' && f.pages > 1) ? ar(cur.page) + ' / ' + ar(f.pages) :
     f.kind === 'sheet' ? sheetGrid(f, cur.page - 1).name + (f.pages > 1 ? '  ' + ar(cur.page) + ' / ' + ar(f.pages) : '') : '';
   $('hud-zoom').textContent = cur.zoom !== 1 ? ar(Math.round(cur.zoom * 100)) + '٪' : '';
   $('hud').classList.add('on');
@@ -1053,6 +1116,7 @@ function snapshot() {
   var g = c.getContext('2d');
   g.fillStyle = '#111214'; g.fillRect(0, 0, 480, 270);
   var sr = stage.getBoundingClientRect();
+  if (cur.f.kind === 'deck') return deckThumb(cur.f, cur.page);
   if (cur.f.kind === 'sheet') { snapSheet(g, k, sr); if (strokes.length) g.drawImage(inkEl, 0, 0, 480, 270); return c.toDataURL('image/jpeg', .72); }
   Array.prototype.forEach.call(pagesEl.children, function (el) {
     var r = el.getBoundingClientRect();

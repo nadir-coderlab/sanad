@@ -59,6 +59,7 @@ h1 { font-size: 72px; font-weight: 700; line-height: 1.05; white-space: nowrap; 
 #pages .pg canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 #pages.slides .pg { margin: 0 auto; box-shadow: none; }
 #pages img.media, #pages video.media { display: block; margin: 0 auto; }
+#pages iframe.deck { position: absolute; inset: 0; width: 1920px; height: 1080px; border: 0; background: #030B14; pointer-events: none; }
 #ink { position: absolute; inset: 0; width: 1920px; height: 1080px; pointer-events: none; }
 /* ── Excel: مثل ما ينفتح على كمبيوتر ── */
 #pages.sheet { padding: 70px 0 90px; box-sizing: border-box; color: #1b1b1b; background: #e9e9e9; min-height: 100%; font-family: Calibri, Arial, T, sans-serif; }
