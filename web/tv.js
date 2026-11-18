@@ -104,6 +104,7 @@ function stopScreen() {
   $('view').hidden = true;
   $('toast').hidden = true;
   $('stopped').hidden = false;
+  document.documentElement.style.background = document.body.style.background = '#000';
 }
 function checkStopped(done) {
   var x = new XMLHttpRequest();

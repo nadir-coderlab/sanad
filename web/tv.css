@@ -12,10 +12,7 @@ html, body { width: 100vw; height: 100vh; overflow: hidden; background: #050d1a;
 /* التصميم مرسوم على ١٩٢٠×١٠٨٠ ويتكبّر/يتصغّر ليملأ أي شاشة */
 #root { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0; overflow: hidden; }
 [hidden] { display: none !important; }
-#stopped { position: absolute; inset: 0; z-index: 50; background: #050d1a; display: flex; flex-direction: column;
-  align-items: center; justify-content: center; gap: 40px; }
-#stopped img { width: 220px; opacity: .5; }
-#stopped p { font-size: 34px; color: var(--faint); }
+#stopped { position: absolute; inset: 0; z-index: 50; background: #000; }
 
 /* ── شاشة البداية ── */
 #home { position: absolute; inset: 0; background:
