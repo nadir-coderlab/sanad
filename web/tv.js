@@ -62,6 +62,7 @@ function updateStatus() {
 }
 
 function startPeer() {
+  if (stopped) return;
   restarting = false;
   online = false;
   setStatus('', 'جارٍ الاتصال…');
@@ -86,9 +87,43 @@ function restart(ms) {
   try { peer.destroy(); } catch (e) {}
   setTimeout(startPeer, ms);
 }
+
+// ── إيقاف الشاشة عن بعد ──
+// stopped.json في الصفحة الحية فيه أرقام الشاشات الموقوفة. الشاشة اللي رقمها فيه تخفي الباركود وتقطع الاتصال
+// وتمسح ملفاتها، ولا تتصل حتى ينشال رقمها من الملف. تفحصه عند الفتح وكل خمس دقائق، وتتذكر الإيقاف لو انقطع النت.
+// الشاشات الثانية ما تتأثر: كل شاشة تقارن رقمها هي بس.
+var stopped = localStorage.getItem('sanad-stopped') === sid;
+function stopScreen() {
+  if (!stopped) localStorage.setItem('sanad-stopped', sid);
+  stopped = true;
+  try { if (peer) peer.destroy(); } catch (e) {}
+  conns.forEach(function (c) { try { c.close(); } catch (e) {} });
+  conns = [];
+  if (typeof files !== 'undefined') files.slice().forEach(function (f) { try { removeFile(f.id, true); } catch (e) {} });
+  $('home').hidden = true;
+  $('view').hidden = true;
+  $('toast').hidden = true;
+  $('stopped').hidden = false;
+}
+function checkStopped(done) {
+  var x = new XMLHttpRequest();
+  x.open('GET', BASE + 'stopped.json?t=' + Date.now());
+  x.timeout = 8000;
+  x.onload = function () {
+    var ids = [];
+    try { ids = JSON.parse(x.responseText).ids || []; } catch (e) { if (done) done(); return; }
+    if (x.status !== 200) { if (done) done(); return; }
+    if (ids.indexOf(sid) >= 0) stopScreen();
+    else if (stopped) { localStorage.removeItem('sanad-stopped'); location.reload(); return; }
+    if (done) done();
+  };
+  x.onerror = x.ontimeout = function () { if (done) done(); };
+  x.send();
+}
+setInterval(checkStopped, 5 * 60000);
 // احتياط: لو علق الاتصال لأي سبب
 setInterval(function () {
-  if (!peer || restarting) return;
+  if (!peer || restarting || stopped) return;
   if (peer.destroyed) startPeer();
   else if (peer.disconnected) peer.reconnect();
 }, 30000);
@@ -1182,6 +1217,7 @@ var KEYS = { 37: 'left', 38: 'up', 39: 'right', 40: 'down', 13: 'enter', 10009: 
   403: 'red', 404: 'green', 405: 'yellow', 406: 'blue', 187: 'green', 189: 'red', 48: 'yellow' };
 
 function onKey(code) {
+  if (stopped) return false;
   var k = KEYS[code];
   if (!k) return false;
   // قائمة الملفات ما تنعرض على الشاشة، فالاختيار من الجوال بس
@@ -1237,4 +1273,11 @@ function throttle(fn, ms) {
   };
 }
 
-startPeer();
+// الاتصال يبدأ بعد فحص الإيقاف (أو بعد ٤ ثوانٍ لو ما ردّ)، عشان الشاشة الموقوفة ما تظهر ولا لحظة
+(function () {
+  var started = false;
+  function go() { if (started || stopped) return; started = true; startPeer(); }
+  if (stopped) stopScreen();
+  checkStopped(go);
+  setTimeout(go, 4000);
+})();
